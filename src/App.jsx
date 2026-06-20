@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   Award,
   BarChart3,
@@ -44,6 +44,7 @@ import {
   userProfile,
   weeklyLearning,
 } from './data/mockData.js';
+import { loadStudycatFamilySnapshot, subscribeStudycatFamilySnapshot } from './api.js';
 
 const studentNav = [
   { id: 'home', label: '홈', icon: Home },
@@ -86,8 +87,183 @@ function createId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const defaultSyncData = {
+  userProfile,
+  studySummary,
+  subjectStudy,
+  weeklyLearning,
+  schedules: initialSchedules,
+  todos: initialTodos,
+  attendance,
+  points,
+  linkedSystems,
+  syncStatus: 'Studycat 연결 대기',
+  updatedAt: null,
+};
+
+const SyncDataContext = createContext(defaultSyncData);
+
+function useSyncData() {
+  return useContext(SyncDataContext) ?? defaultSyncData;
+}
+
+function safeMinutes(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? Math.max(0, Math.floor(next)) : fallback;
+}
+
+function formatUpdatedAt(value) {
+  if (!value) return '아직 동기화 전';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '동기화 시간 확인 필요';
+  return date.toLocaleString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function toParentSchedule(item) {
+  const time = item.start ? `${item.day ?? '오늘'} ${item.start}` : item.time ?? '오늘';
+  return {
+    id: item.id ?? createId('schedule'),
+    time,
+    title: item.title ?? 'Studycat 일정',
+    tag: item.type ? `Studycat ${item.type}` : item.tag ?? 'Studycat 연동',
+  };
+}
+
+function toParentTodo(task) {
+  return {
+    id: task.id ?? createId('todo'),
+    title: task.title ?? 'Studycat 과제',
+    done: Boolean(task.completed),
+  };
+}
+
+function studycatStatusText(student) {
+  if (!student) return 'Studycat 연결 대기';
+  if (student.status === 'studying') return `${student.subject || '선택 과목'} 공부 중`;
+  if (student.status === 'break') return '잠시 휴식 중';
+  return '최근 기록 대기';
+}
+
+function buildSyncData(snapshot, linkedStudentId, connectionState) {
+  const report = snapshot?.report ?? snapshot?.reports?.[0] ?? null;
+  const student = snapshot?.students?.find((item) => item.id === linkedStudentId) ?? snapshot?.students?.[0] ?? null;
+  if (!report && !student) {
+    return {
+      ...defaultSyncData,
+      syncStatus: connectionState,
+    };
+  }
+
+  const nextStudentName = report?.profile?.studentName || report?.studentName || student?.name || userProfile.studentName;
+  const nextSummary = report?.studySummary
+    ? {
+        today: safeMinutes(report.studySummary.today, studySummary.today),
+        week: safeMinutes(report.studySummary.week, studySummary.week),
+        month: safeMinutes(report.studySummary.month, studySummary.month),
+        custom: safeMinutes(report.studySummary.custom, studySummary.custom),
+        streak: safeMinutes(report.studySummary.streak, studySummary.streak),
+        goal: safeMinutes(report.studySummary.goal, studySummary.goal),
+      }
+    : {
+        ...studySummary,
+        today: safeMinutes(student?.todayMinutes, studySummary.today),
+      };
+
+  const nextSubjectStudy = Array.isArray(report?.subjectStudy) && report.subjectStudy.length
+    ? report.subjectStudy.map((item, index) => ({
+        subject: item.subject ?? `과목 ${index + 1}`,
+        minutes: safeMinutes(item.minutes),
+        color: item.color ?? subjectStudy[index % subjectStudy.length]?.color ?? '#12372f',
+        note: item.note ?? 'Studycat 실시간',
+      }))
+    : subjectStudy;
+
+  const nextWeeklyLearning = Array.isArray(report?.weeklyLearning) && report.weeklyLearning.length
+    ? report.weeklyLearning.map((item) => ({
+        day: item.day ?? item.date?.slice(5) ?? '일',
+        minutes: safeMinutes(item.minutes),
+        completion: safeMinutes(item.completion),
+      }))
+    : weeklyLearning;
+
+  const nextSchedules = Array.isArray(report?.schedules) && report.schedules.length
+    ? report.schedules.map(toParentSchedule)
+    : initialSchedules;
+
+  const nextTodos = Array.isArray(report?.tasks) && report.tasks.length
+    ? report.tasks.map(toParentTodo)
+    : initialTodos;
+
+  const nextAttendance = report?.attendance
+    ? {
+        status: report.attendance.status ?? studycatStatusText(student),
+        checkIn: report.attendance.checkIn ?? '-',
+        checkOut: report.attendance.checkOut ?? '-',
+        seat: report.attendance.seat ?? attendance.seat,
+        timeline: Array.isArray(report.attendance.timeline) && report.attendance.timeline.length
+          ? report.attendance.timeline
+          : attendance.timeline,
+      }
+    : {
+        ...attendance,
+        status: studycatStatusText(student),
+      };
+
+  const rewardPoints = report?.rewards
+    ? [{
+        id: 'studycat-stars',
+        type: '별',
+        amount: safeMinutes(report.rewards.fruits),
+        reason: 'Studycat 보상 잔액',
+        date: '실시간',
+      }]
+    : [];
+  const penaltyPoint = report?.penalty
+    ? [{
+        id: 'studycat-penalty',
+        type: '벌점',
+        amount: -safeMinutes(report.penalty.points),
+        reason: 'medipenalty 누적',
+        date: '실시간',
+      }]
+    : [];
+
+  return {
+    userProfile: {
+      ...userProfile,
+      studentName: nextStudentName,
+      parentName: `${nextStudentName} 학부모`,
+      target: studycatStatusText(student),
+      phone: report?.profile?.studentPhone || userProfile.phone,
+    },
+    studySummary: nextSummary,
+    subjectStudy: nextSubjectStudy,
+    weeklyLearning: nextWeeklyLearning,
+    schedules: nextSchedules,
+    todos: nextTodos,
+    attendance: nextAttendance,
+    points: [...rewardPoints, ...penaltyPoint, ...points].slice(0, 8),
+    linkedSystems: linkedSystems.map((system) => (
+      system.name === 'StudyCat'
+        ? {
+            ...system,
+            status: report ? `실시간 연결됨 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
+          }
+        : system
+    )),
+    syncStatus: report ? `Studycat 동기화 완료 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
+    updatedAt: report?.updatedAt ?? snapshot?.serverTime ?? null,
+  };
+}
+
 function App() {
-  const demoRole = new URLSearchParams(window.location.search).get('role');
+  const searchParams = new URLSearchParams(window.location.search);
+  const demoRole = searchParams.get('role');
   const initialRole = demoRole === 'parent' || demoRole === 'student' ? demoRole : null;
   const [role, setRole] = useState('student');
   const [sessionRole, setSessionRole] = useState(initialRole);
@@ -95,10 +271,63 @@ function App() {
   const [timeFilter, setTimeFilter] = useState('today');
   const [schedules, setSchedules] = useState(initialSchedules);
   const [todos, setTodos] = useState(initialTodos);
+  const [linkedStudentId, setLinkedStudentId] = useState(
+    searchParams.get('studentId') || localStorage.getItem('studycat-linked-student-id') || 'qtf258',
+  );
+  const [familySnapshot, setFamilySnapshot] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('Studycat 연결 대기');
+
+  const syncData = useMemo(
+    () => buildSyncData(familySnapshot, linkedStudentId, syncStatus),
+    [familySnapshot, linkedStudentId, syncStatus],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshSnapshot() {
+      try {
+        const snapshot = await loadStudycatFamilySnapshot(linkedStudentId);
+        if (cancelled) return;
+        setFamilySnapshot(snapshot);
+        setSyncStatus('Studycat 연결됨');
+      } catch {
+        if (!cancelled) setSyncStatus('Studycat 연결 실패');
+      }
+    }
+
+    void refreshSnapshot();
+    const unsubscribe = subscribeStudycatFamilySnapshot(
+      linkedStudentId,
+      (snapshot) => {
+        if (cancelled) return;
+        setFamilySnapshot(snapshot);
+        setSyncStatus('Studycat 실시간 연결됨');
+      },
+      () => {
+        if (!cancelled) setSyncStatus('Studycat 실시간 재연결 대기');
+      },
+    );
+    const id = window.setInterval(refreshSnapshot, 30000);
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.clearInterval(id);
+    };
+  }, [linkedStudentId]);
+
+  useEffect(() => {
+    setSchedules(syncData.schedules);
+    setTodos(syncData.todos);
+  }, [syncData.schedules, syncData.todos]);
 
   const navItems = sessionRole === 'parent' ? parentNav : studentNav;
 
-  function login() {
+  function login(nextStudentId) {
+    const normalizedStudentId = nextStudentId?.trim() || 'qtf258';
+    setLinkedStudentId(normalizedStudentId);
+    localStorage.setItem('studycat-linked-student-id', normalizedStudentId);
     setSessionRole(role);
     setActiveTab('home');
   }
@@ -109,45 +338,52 @@ function App() {
   }
 
   if (!sessionRole) {
-    return <LoginScreen role={role} setRole={setRole} onLogin={login} />;
+    return (
+      <SyncDataContext.Provider value={syncData}>
+        <LoginScreen role={role} setRole={setRole} linkedStudentId={linkedStudentId} onLogin={login} />
+      </SyncDataContext.Provider>
+    );
   }
 
   return (
-    <MobileShell
-      role={sessionRole}
-      activeTab={activeTab}
-      navItems={navItems}
-      onNavigate={setActiveTab}
-      onLogout={logout}
-    >
-      {sessionRole === 'student' ? (
-        <StudentRoutes
-          activeTab={activeTab}
-          timeFilter={timeFilter}
-          setTimeFilter={setTimeFilter}
-          schedules={schedules}
-          setSchedules={setSchedules}
-          todos={todos}
-          setTodos={setTodos}
-          onNavigate={setActiveTab}
-        />
-      ) : (
-        <ParentRoutes
-          activeTab={activeTab}
-          timeFilter={timeFilter}
-          setTimeFilter={setTimeFilter}
-          schedules={schedules}
-          setSchedules={setSchedules}
-          todos={todos}
-          setTodos={setTodos}
-          onNavigate={setActiveTab}
-        />
-      )}
-    </MobileShell>
+    <SyncDataContext.Provider value={syncData}>
+      <MobileShell
+        role={sessionRole}
+        activeTab={activeTab}
+        navItems={navItems}
+        onNavigate={setActiveTab}
+        onLogout={logout}
+      >
+        {sessionRole === 'student' ? (
+          <StudentRoutes
+            activeTab={activeTab}
+            timeFilter={timeFilter}
+            setTimeFilter={setTimeFilter}
+            schedules={schedules}
+            setSchedules={setSchedules}
+            todos={todos}
+            setTodos={setTodos}
+            onNavigate={setActiveTab}
+          />
+        ) : (
+          <ParentRoutes
+            activeTab={activeTab}
+            timeFilter={timeFilter}
+            setTimeFilter={setTimeFilter}
+            schedules={schedules}
+            setSchedules={setSchedules}
+            todos={todos}
+            setTodos={setTodos}
+            onNavigate={setActiveTab}
+          />
+        )}
+      </MobileShell>
+    </SyncDataContext.Provider>
   );
 }
 
-function LoginScreen({ role, setRole, onLogin }) {
+function LoginScreen({ role, setRole, linkedStudentId, onLogin }) {
+  const [studentId, setStudentId] = useState(linkedStudentId || 'qtf258');
   return (
     <main className="login-screen">
       <section className="login-card" aria-label="로그인">
@@ -184,14 +420,14 @@ function LoginScreen({ role, setRole, onLogin }) {
 
         <label className="input-label">
           아이디
-          <input placeholder={role === 'student' ? 'student.demo' : 'parent.demo'} />
+          <input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="qtf258" />
         </label>
         <label className="input-label">
           비밀번호
           <input type="password" placeholder="demo1234" />
         </label>
 
-        <button className="primary-action" type="button" onClick={onLogin}>
+        <button className="primary-action" type="button" onClick={() => onLogin(studentId)}>
           {role === 'student' ? '학생 페이지로 들어가기' : '학부모 페이지로 들어가기'}
           <ChevronRight size={20} />
         </button>
@@ -206,8 +442,10 @@ function LoginScreen({ role, setRole, onLogin }) {
 }
 
 function MobileShell({ role, activeTab, navItems, onNavigate, onLogout, children }) {
-  const title = role === 'student' ? userProfile.studentName : userProfile.parentName;
-  const subtitle = role === 'student' ? userProfile.target : `${userProfile.studentName} 학습 리포트`;
+  const syncData = useSyncData();
+  const profile = syncData.userProfile;
+  const title = role === 'student' ? profile.studentName : profile.parentName;
+  const subtitle = role === 'student' ? profile.target : `${profile.studentName} 학습 리포트`;
 
   return (
     <div className="app-root">
@@ -294,6 +532,7 @@ function StudentHome({
   setTodos,
   onNavigate,
 }) {
+  const { studySummary } = useSyncData();
   const progress = Math.min(99, Math.round((studySummary.today / studySummary.goal) * 100));
 
   return (
@@ -358,6 +597,7 @@ function ParentHome({
   setTodos,
   onNavigate,
 }) {
+  const { studySummary, userProfile } = useSyncData();
   return (
     <div className="screen-stack">
       <ParentStatusCard onNavigate={onNavigate} />
@@ -415,6 +655,7 @@ function ParentHome({
 }
 
 function ParentStatusCard({ onNavigate }) {
+  const { attendance } = useSyncData();
   return (
     <button className="parent-status-card" type="button" onClick={() => onNavigate('attendance')}>
       <div>
@@ -459,6 +700,7 @@ function FeatureTile({ icon: Icon, title, detail, onClick }) {
 }
 
 function LearningPage({ timeFilter, setTimeFilter, audience }) {
+  const { studySummary } = useSyncData();
   return (
     <div className="screen-stack">
       <SectionHeader
@@ -485,6 +727,7 @@ function LearningPage({ timeFilter, setTimeFilter, audience }) {
 }
 
 function StatStrip() {
+  const { studySummary } = useSyncData();
   return (
     <section className="stat-strip" aria-label="학습 요약">
       <div>
@@ -632,6 +875,7 @@ function MealPage() {
 }
 
 function AttendancePage() {
+  const { attendance } = useSyncData();
   return (
     <div className="screen-stack">
       <SectionHeader
@@ -713,6 +957,7 @@ function RecordPage({ role }) {
 }
 
 function SubjectTimeCard({ expanded = false }) {
+  const { subjectStudy } = useSyncData();
   const total = subjectStudy.reduce((sum, item) => sum + item.minutes, 0);
   return (
     <section className="data-card">
@@ -733,7 +978,7 @@ function SubjectTimeCard({ expanded = false }) {
             <div className="bar-track">
               <span
                 style={{
-                  width: `${Math.max(14, Math.round((item.minutes / total) * 100))}%`,
+                  width: `${total > 0 ? Math.max(14, Math.round((item.minutes / total) * 100)) : 4}%`,
                   background: item.color,
                 }}
               />
@@ -940,7 +1185,8 @@ function InlineComposer({ placeholder, buttonLabel, onAdd, compact = false }) {
 }
 
 function WeeklyCard({ expanded = false }) {
-  const max = Math.max(...weeklyLearning.map((item) => item.minutes));
+  const { weeklyLearning } = useSyncData();
+  const max = Math.max(1, ...weeklyLearning.map((item) => item.minutes));
   const average = Math.round(
     weeklyLearning.reduce((sum, item) => sum + item.minutes, 0) / weeklyLearning.length,
   );
@@ -979,6 +1225,7 @@ function WeeklyCard({ expanded = false }) {
 }
 
 function PointsCard({ expanded = false }) {
+  const { points } = useSyncData();
   const total = points.reduce((sum, item) => sum + item.amount, 0);
   return (
     <section className="data-card">
@@ -1011,6 +1258,7 @@ function PointsCard({ expanded = false }) {
 }
 
 function IntegrationCard() {
+  const { linkedSystems, syncStatus } = useSyncData();
   return (
     <section className="integration-card">
       <div className="card-header">
@@ -1019,6 +1267,7 @@ function IntegrationCard() {
           <h3>나중에 붙일 데이터 소스</h3>
         </div>
         <Sparkles size={22} />
+        <span>{syncStatus}</span>
       </div>
       {linkedSystems.map((system) => (
         <div className="integration-row" key={system.name}>
