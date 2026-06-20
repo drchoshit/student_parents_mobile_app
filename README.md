@@ -21,3 +21,12 @@ VITE_STUDYCAT_PARENT_TOKEN=
 If the Studycat Render service has `APP_PARENT_TOKEN` set, put the same value in `VITE_STUDYCAT_PARENT_TOKEN`.
 
 Use `?studentId=qtf258` or enter the Studycat student ID on the login screen to link a student.
+
+## Admin
+
+Login with:
+
+- ID: `admin`
+- Password: `admin1234`
+
+For student push messages, set Studycat `APP_ADMIN_TOKEN=admin1234` or set this app's `VITE_STUDYCAT_ADMIN_TOKEN` to the same server token.

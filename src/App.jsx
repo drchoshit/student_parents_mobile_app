@@ -11,6 +11,7 @@ import {
   Clock3,
   DoorOpen,
   Edit3,
+  FileSpreadsheet,
   Home,
   LineChart,
   LogOut,
@@ -22,6 +23,8 @@ import {
   Plus,
   RefreshCw,
   Salad,
+  Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Timer,
@@ -44,7 +47,7 @@ import {
   userProfile,
   weeklyLearning,
 } from './data/mockData.js';
-import { loadStudycatFamilySnapshot, subscribeStudycatFamilySnapshot } from './api.js';
+import { loadStudycatFamilySnapshot, loadStudycatStudents, sendStudycatAdminMessage, subscribeStudycatFamilySnapshot } from './api.js';
 
 const studentNav = [
   { id: 'home', label: '홈', icon: Home },
@@ -60,6 +63,18 @@ const parentNav = [
   { id: 'study', label: '학습', icon: BarChart3 },
   { id: 'mentoring', label: '멘토링', icon: MessageSquareText },
   { id: 'record', label: '기록', icon: Award },
+];
+
+const adminSections = [
+  { id: 'dashboard', label: '대시보드', icon: Home },
+  { id: 'students', label: '학생', icon: UsersRound },
+  { id: 'analysis', label: '학습분석', icon: BarChart3 },
+  { id: 'schedules', label: '일정', icon: CalendarCheck },
+  { id: 'meals', label: '도시락', icon: FileSpreadsheet },
+  { id: 'messages', label: '푸시메시지', icon: Send },
+  { id: 'attendance', label: '입퇴실', icon: DoorOpen },
+  { id: 'mentoring', label: '멘토링', icon: MessageSquareText },
+  { id: 'penalties', label: '벌점', icon: ClipboardCheck },
 ];
 
 const timeFilters = [
@@ -97,6 +112,8 @@ const defaultSyncData = {
   attendance,
   points,
   linkedSystems,
+  students: [],
+  reports: [],
   syncStatus: 'Studycat 연결 대기',
   updatedAt: null,
 };
@@ -152,9 +169,13 @@ function studycatStatusText(student) {
 function buildSyncData(snapshot, linkedStudentId, connectionState) {
   const report = snapshot?.report ?? snapshot?.reports?.[0] ?? null;
   const student = snapshot?.students?.find((item) => item.id === linkedStudentId) ?? snapshot?.students?.[0] ?? null;
+  const reports = Array.isArray(snapshot?.reports) ? snapshot.reports : report ? [report] : [];
+  const students = Array.isArray(snapshot?.students) ? snapshot.students : [];
   if (!report && !student) {
     return {
       ...defaultSyncData,
+      reports,
+      students,
       syncStatus: connectionState,
     };
   }
@@ -256,6 +277,8 @@ function buildSyncData(snapshot, linkedStudentId, connectionState) {
           }
         : system
     )),
+    students,
+    reports,
     syncStatus: report ? `Studycat 동기화 완료 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
     updatedAt: report?.updatedAt ?? snapshot?.serverTime ?? null,
   };
@@ -264,13 +287,14 @@ function buildSyncData(snapshot, linkedStudentId, connectionState) {
 function App() {
   const searchParams = new URLSearchParams(window.location.search);
   const demoRole = searchParams.get('role');
-  const initialRole = demoRole === 'parent' || demoRole === 'student' ? demoRole : null;
+  const initialRole = demoRole === 'parent' || demoRole === 'student' || demoRole === 'admin' ? demoRole : null;
   const [role, setRole] = useState('student');
   const [sessionRole, setSessionRole] = useState(initialRole);
   const [activeTab, setActiveTab] = useState('home');
   const [timeFilter, setTimeFilter] = useState('today');
   const [schedules, setSchedules] = useState(initialSchedules);
   const [todos, setTodos] = useState(initialTodos);
+  const [adminToken, setAdminToken] = useState('');
   const [linkedStudentId, setLinkedStudentId] = useState(
     searchParams.get('studentId') || localStorage.getItem('studycat-linked-student-id') || 'qtf258',
   );
@@ -284,12 +308,16 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const snapshotStudentId = sessionRole === 'admin' ? undefined : linkedStudentId;
 
     async function refreshSnapshot() {
       try {
-        const snapshot = await loadStudycatFamilySnapshot(linkedStudentId);
+        const [snapshot, liveStudents] = await Promise.all([
+          loadStudycatFamilySnapshot(snapshotStudentId),
+          sessionRole === 'admin' ? loadStudycatStudents().catch(() => null) : Promise.resolve(null),
+        ]);
         if (cancelled) return;
-        setFamilySnapshot(snapshot);
+        setFamilySnapshot(liveStudents?.students ? { ...snapshot, students: liveStudents.students } : snapshot);
         setSyncStatus('Studycat 연결됨');
       } catch {
         if (!cancelled) setSyncStatus('Studycat 연결 실패');
@@ -298,7 +326,7 @@ function App() {
 
     void refreshSnapshot();
     const unsubscribe = subscribeStudycatFamilySnapshot(
-      linkedStudentId,
+      snapshotStudentId,
       (snapshot) => {
         if (cancelled) return;
         setFamilySnapshot(snapshot);
@@ -315,16 +343,22 @@ function App() {
       unsubscribe();
       window.clearInterval(id);
     };
-  }, [linkedStudentId]);
+  }, [linkedStudentId, sessionRole]);
 
   useEffect(() => {
     setSchedules(syncData.schedules);
     setTodos(syncData.todos);
   }, [syncData.schedules, syncData.todos]);
 
-  const navItems = sessionRole === 'parent' ? parentNav : studentNav;
+  const navItems = sessionRole === 'admin' ? [] : sessionRole === 'parent' ? parentNav : studentNav;
 
-  function login(nextStudentId) {
+  function login(nextStudentId, nextAdminToken = '') {
+    if (role === 'admin') {
+      setAdminToken(nextAdminToken);
+      setSessionRole('admin');
+      setActiveTab('dashboard');
+      return;
+    }
     const normalizedStudentId = nextStudentId?.trim() || 'qtf258';
     setLinkedStudentId(normalizedStudentId);
     localStorage.setItem('studycat-linked-student-id', normalizedStudentId);
@@ -354,7 +388,9 @@ function App() {
         onNavigate={setActiveTab}
         onLogout={logout}
       >
-        {sessionRole === 'student' ? (
+        {sessionRole === 'admin' ? (
+          <AdminRoutes activeTab={activeTab} setActiveTab={setActiveTab} adminToken={adminToken} />
+        ) : sessionRole === 'student' ? (
           <StudentRoutes
             activeTab={activeTab}
             timeFilter={timeFilter}
@@ -384,6 +420,32 @@ function App() {
 
 function LoginScreen({ role, setRole, linkedStudentId, onLogin }) {
   const [studentId, setStudentId] = useState(linkedStudentId || 'qtf258');
+  const [password, setPassword] = useState(role === 'admin' ? 'admin1234' : '');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setError('');
+    if (role === 'admin') {
+      setStudentId('admin');
+      setPassword('admin1234');
+    } else if (studentId === 'admin') {
+      setStudentId(linkedStudentId || 'qtf258');
+      setPassword('');
+    }
+  }, [linkedStudentId, role]);
+
+  function handleSubmit() {
+    if (role === 'admin') {
+      if (studentId.trim() !== 'admin' || password !== 'admin1234') {
+        setError('관리자 아이디 또는 비밀번호가 맞지 않습니다.');
+        return;
+      }
+      onLogin(undefined, password);
+      return;
+    }
+    onLogin(studentId);
+  }
+
   return (
     <main className="login-screen">
       <section className="login-card" aria-label="로그인">
@@ -416,18 +478,27 @@ function LoginScreen({ role, setRole, linkedStudentId, onLogin }) {
             <UsersRound size={18} />
             학부모
           </button>
+          <button
+            className={role === 'admin' ? 'active' : ''}
+            onClick={() => setRole('admin')}
+            type="button"
+          >
+            <ShieldCheck size={18} />
+            관리자
+          </button>
         </div>
 
         <label className="input-label">
           아이디
-          <input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="qtf258" />
+          <input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder={role === 'admin' ? 'admin' : 'qtf258'} />
         </label>
         <label className="input-label">
           비밀번호
-          <input type="password" placeholder="demo1234" />
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={role === 'admin' ? 'admin1234' : 'demo1234'} />
         </label>
+        {error ? <div className="login-error">{error}</div> : null}
 
-        <button className="primary-action" type="button" onClick={() => onLogin(studentId)}>
+        <button className="primary-action" type="button" onClick={handleSubmit}>
           {role === 'student' ? '학생 페이지로 들어가기' : '학부모 페이지로 들어가기'}
           <ChevronRight size={20} />
         </button>
@@ -444,11 +515,11 @@ function LoginScreen({ role, setRole, linkedStudentId, onLogin }) {
 function MobileShell({ role, activeTab, navItems, onNavigate, onLogout, children }) {
   const syncData = useSyncData();
   const profile = syncData.userProfile;
-  const title = role === 'student' ? profile.studentName : profile.parentName;
-  const subtitle = role === 'student' ? profile.target : `${profile.studentName} 학습 리포트`;
+  const title = role === 'admin' ? '관리자' : role === 'student' ? profile.studentName : profile.parentName;
+  const subtitle = role === 'admin' ? syncData.syncStatus : role === 'student' ? profile.target : `${profile.studentName} 학습 리포트`;
 
   return (
-    <div className="app-root">
+    <div className={role === 'admin' ? 'app-root admin-root' : 'app-root'}>
       <header className="app-header">
         <div>
           <p>{centerInfo.name}</p>
@@ -521,6 +592,461 @@ function ParentRoutes(props) {
     default:
       return <ParentHome {...props} />;
   }
+}
+
+function getAdminRows(syncData) {
+  const studentMap = new Map((syncData.students ?? []).map((student) => [student.id, student]));
+  const reportRows = (syncData.reports ?? []).map((report) => {
+    const student = studentMap.get(report.studentId) ?? {};
+    return {
+      id: report.studentId,
+      name: report.studentName || report.profile?.studentName || student.name || report.studentId,
+      status: student.status || report.attendance?.status || 'offline',
+      subject: student.subject || report.subjectStudy?.[0]?.subject || '-',
+      today: safeMinutes(report.studySummary?.today),
+      week: safeMinutes(report.studySummary?.week),
+      month: safeMinutes(report.studySummary?.month),
+      completion: safeMinutes(report.analysis?.completionRate),
+      focus: safeMinutes(report.analysis?.focusScore),
+      penalty: safeMinutes(report.penalty?.points),
+      report,
+      student,
+    };
+  });
+
+  const reportedIds = new Set(reportRows.map((row) => row.id));
+  const liveOnlyRows = [...studentMap.values()]
+    .filter((student) => !reportedIds.has(student.id))
+    .map((student) => ({
+      id: student.id,
+      name: student.name || student.id,
+      status: student.status || 'offline',
+      subject: student.subject || '-',
+      today: safeMinutes(student.todayMinutes),
+      week: 0,
+      month: 0,
+      completion: 0,
+      focus: 0,
+      penalty: 0,
+      report: null,
+      student,
+    }));
+
+  return [...reportRows, ...liveOnlyRows].sort((a, b) => b.today - a.today || a.name.localeCompare(b.name, 'ko-KR'));
+}
+
+function AdminRoutes({ activeTab, setActiveTab, adminToken }) {
+  const syncData = useSyncData();
+  const rows = getAdminRows(syncData);
+  const selectedTab = activeTab === 'home' ? 'dashboard' : activeTab;
+  const totalToday = rows.reduce((sum, row) => sum + row.today, 0);
+  const activeCount = rows.filter((row) => row.status === 'studying' || row.status === 'break' || row.today > 0).length;
+  const avgFocus = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.focus, 0) / rows.length) : 0;
+  const totalPenalty = rows.reduce((sum, row) => sum + row.penalty, 0);
+
+  function renderPage() {
+    switch (selectedTab) {
+      case 'students':
+        return <AdminStudentsPage rows={rows} />;
+      case 'analysis':
+        return <AdminAnalysisPage rows={rows} />;
+      case 'schedules':
+        return <AdminSchedulesPage rows={rows} />;
+      case 'meals':
+        return <AdminMealsPage />;
+      case 'messages':
+        return <AdminMessagesPage rows={rows} adminToken={adminToken} />;
+      case 'attendance':
+        return <AdminAttendancePage rows={rows} />;
+      case 'mentoring':
+        return <AdminMentoringPage rows={rows} />;
+      case 'penalties':
+        return <AdminPenaltiesPage rows={rows} />;
+      default:
+        return <AdminDashboard rows={rows} totalToday={totalToday} activeCount={activeCount} avgFocus={avgFocus} totalPenalty={totalPenalty} />;
+    }
+  }
+
+  return (
+    <div className="screen-stack admin-workspace">
+      <section className="admin-overview">
+        <div>
+          <p>Studycat 관리자</p>
+          <h2>{syncData.syncStatus}</h2>
+          <span>전체 학생 {rows.length}명 · 실시간 리포트 {syncData.reports?.length ?? 0}건</span>
+        </div>
+        <button type="button" onClick={() => setActiveTab('dashboard')}>
+          <RefreshCw size={16} />
+          새로고침
+        </button>
+      </section>
+
+      <section className="admin-section-grid" aria-label="관리자 메뉴">
+        {adminSections.map((section) => {
+          const Icon = section.icon;
+          return (
+            <button
+              className={selectedTab === section.id ? 'active' : ''}
+              key={section.id}
+              type="button"
+              onClick={() => setActiveTab(section.id)}
+            >
+              <Icon size={18} />
+              <span>{section.label}</span>
+            </button>
+          );
+        })}
+      </section>
+
+      {renderPage()}
+    </div>
+  );
+}
+
+function AdminDashboard({ rows, totalToday, activeCount, avgFocus, totalPenalty }) {
+  const topStudents = rows.slice(0, 5);
+  return (
+    <>
+      <section className="admin-kpi-grid">
+        <AdminKpi title="오늘 총 공부" value={formatMinutes(totalToday)} detail={`${activeCount}명 활동`} />
+        <AdminKpi title="평균 집중도" value={`${avgFocus}%`} detail="과제 완료율 + 시간 기준" />
+        <AdminKpi title="누적 벌점" value={`${totalPenalty}점`} detail="medipenalty 연동값" tone={totalPenalty > 0 ? 'warn' : 'good'} />
+        <AdminKpi title="리포트 학생" value={`${rows.length}명`} detail="Studycat family snapshot" />
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-head">
+          <h3>오늘 공부시간 TOP 5</h3>
+          <span>학생 앱 타이머 기준</span>
+        </div>
+        <div className="admin-rank-list">
+          {topStudents.map((row, index) => (
+            <div key={row.id}>
+              <strong>{index + 1}. {row.name}</strong>
+              <span>{formatMinutes(row.today)} · {row.subject}</span>
+              <em>{row.status}</em>
+            </div>
+          ))}
+          {!topStudents.length ? <div className="admin-empty">아직 Studycat 리포트가 없습니다.</div> : null}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AdminKpi({ title, value, detail, tone = 'normal' }) {
+  return (
+    <div className={`admin-kpi ${tone}`}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </div>
+  );
+}
+
+function AdminStudentsPage({ rows }) {
+  const [query, setQuery] = useState('');
+  const filtered = rows.filter((row) => `${row.name} ${row.id}`.toLowerCase().includes(query.trim().toLowerCase()));
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>학생 전체 현황</h3>
+        <label className="admin-search">
+          <Search size={16} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="학생 이름 또는 ID 검색" />
+        </label>
+      </div>
+      <div className="admin-table">
+        {filtered.map((row) => (
+          <article className="admin-row-card" key={row.id}>
+            <div>
+              <strong>{row.name}</strong>
+              <span>{row.id} · {row.status}</span>
+            </div>
+            <div><span>오늘</span><b>{formatMinutes(row.today)}</b></div>
+            <div><span>이번 주</span><b>{formatMinutes(row.week)}</b></div>
+            <div><span>완료율</span><b>{row.completion}%</b></div>
+            <div><span>벌점</span><b>{row.penalty}점</b></div>
+          </article>
+        ))}
+        {!filtered.length ? <div className="admin-empty">검색 결과가 없습니다.</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function AdminAnalysisPage({ rows }) {
+  const subjectTotals = new Map();
+  rows.forEach((row) => {
+    row.report?.subjectStudy?.forEach((item) => {
+      subjectTotals.set(item.subject, (subjectTotals.get(item.subject) ?? 0) + safeMinutes(item.minutes));
+    });
+  });
+  const subjects = [...subjectTotals.entries()].sort((a, b) => b[1] - a[1]);
+  const maxSubject = Math.max(1, ...subjects.map(([, minutes]) => minutes));
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>학습 분석</h3>
+        <span>과목별 누적 및 집중도</span>
+      </div>
+      <div className="admin-analysis-grid">
+        <div>
+          <h4>과목별 오늘 공부시간</h4>
+          {subjects.map(([subject, minutes]) => (
+            <div className="admin-bar-row" key={subject}>
+              <span>{subject}</span>
+              <i><b style={{ width: `${Math.max(4, (minutes / maxSubject) * 100)}%` }} /></i>
+              <strong>{formatMinutes(minutes)}</strong>
+            </div>
+          ))}
+          {!subjects.length ? <div className="admin-empty">과목별 데이터가 아직 없습니다.</div> : null}
+        </div>
+        <div>
+          <h4>집중도 낮은 학생</h4>
+          {rows.slice().sort((a, b) => a.focus - b.focus).slice(0, 6).map((row) => (
+            <div className="admin-mini-row" key={row.id}>
+              <strong>{row.name}</strong>
+              <span>{row.focus}% · 오늘 {formatMinutes(row.today)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdminSchedulesPage({ rows }) {
+  const scheduleRows = rows.flatMap((row) => (row.report?.schedules ?? []).map((schedule) => ({ row, schedule })));
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>전체 일정 확인</h3>
+        <span>Studycat/medischedule 연동 일정</span>
+      </div>
+      <div className="admin-list">
+        {scheduleRows.map(({ row, schedule }) => (
+          <article className="admin-list-card" key={`${row.id}-${schedule.id}`}>
+            <strong>{row.name}</strong>
+            <span>{schedule.day} {schedule.start}-{schedule.end}</span>
+            <p>{schedule.title}</p>
+            <em>{schedule.type}</em>
+          </article>
+        ))}
+        {!scheduleRows.length ? <div className="admin-empty">일정 데이터가 아직 없습니다.</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function readStoredMeals() {
+  try {
+    return JSON.parse(localStorage.getItem('admin-meal-rows-v1') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function normalizeMealRow(row, index) {
+  const keys = Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase(), value]));
+  return {
+    id: `meal-${index}-${Date.now()}`,
+    date: String(keys.date ?? keys['날짜'] ?? keys.day ?? keys['일자'] ?? '').trim(),
+    lunch: String(keys.lunch ?? keys['점심'] ?? keys['중식'] ?? '').trim(),
+    dinner: String(keys.dinner ?? keys['저녁'] ?? keys['석식'] ?? '').trim(),
+    kcal: String(keys.kcal ?? keys['칼로리'] ?? '').trim(),
+    note: String(keys.note ?? keys['비고'] ?? '').trim(),
+  };
+}
+
+function AdminMealsPage() {
+  const [meals, setMeals] = useState(readStoredMeals);
+  const [fileName, setFileName] = useState('');
+
+  async function handleMealFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const XLSX = await import('xlsx');
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).map(normalizeMealRow).filter((row) => row.date || row.lunch || row.dinner);
+    setMeals(rows);
+    setFileName(file.name);
+    localStorage.setItem('admin-meal-rows-v1', JSON.stringify(rows));
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>도시락 월별 엑셀 업로드</h3>
+        <span>{fileName || 'xlsx, xls, csv 지원'}</span>
+      </div>
+      <label className="admin-upload">
+        <FileSpreadsheet size={22} />
+        <div>
+          <strong>월별 도시락 파일 선택</strong>
+          <span>권장 컬럼: 날짜, 점심, 저녁, 칼로리, 비고</span>
+        </div>
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleMealFile} />
+      </label>
+      <div className="admin-list">
+        {meals.slice(0, 40).map((meal) => (
+          <article className="admin-list-card" key={meal.id}>
+            <strong>{meal.date || '날짜 없음'}</strong>
+            <span>점심: {meal.lunch || '-'}</span>
+            <p>저녁: {meal.dinner || '-'}</p>
+            <em>{meal.kcal || meal.note || '도시락'}</em>
+          </article>
+        ))}
+        {!meals.length ? <div className="admin-empty">업로드된 도시락 파일이 없습니다.</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function AdminMessagesPage({ rows, adminToken }) {
+  const [recipientId, setRecipientId] = useState('all');
+  const [body, setBody] = useState('');
+  const [status, setStatus] = useState('');
+  const selected = rows.find((row) => row.id === recipientId);
+
+  async function sendMessage() {
+    if (!body.trim()) return;
+    setStatus('전송 중...');
+    try {
+      await sendStudycatAdminMessage({
+        recipientId,
+        recipientName: recipientId === 'all' ? '전체' : selected?.name ?? recipientId,
+        body: body.trim(),
+        adminToken,
+      });
+      setBody('');
+      setStatus('학생 앱으로 푸시 메시지를 전송했습니다.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지 전송 실패');
+    }
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>학생 앱 푸시 메시지</h3>
+        <span>{status || 'Studycat 관리자 메시지 API 사용'}</span>
+      </div>
+      <div className="admin-form-grid">
+        <label>
+          수신자
+          <select value={recipientId} onChange={(event) => setRecipientId(event.target.value)}>
+            <option value="all">전체 학생</option>
+            {rows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+          </select>
+        </label>
+        <label>
+          메시지
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="학생 앱에 띄울 메시지를 입력하세요." />
+        </label>
+        <button type="button" onClick={sendMessage}>
+          <Send size={17} />
+          전송
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function AdminAttendancePage({ rows }) {
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>학생별 입퇴실 확인</h3>
+        <span>Studycat 타이머 기록 기반</span>
+      </div>
+      <div className="admin-table">
+        {rows.map((row) => (
+          <article className="admin-row-card" key={row.id}>
+            <div>
+              <strong>{row.name}</strong>
+              <span>{row.report?.attendance?.status ?? row.status}</span>
+            </div>
+            <div><span>입실</span><b>{row.report?.attendance?.checkIn ?? '-'}</b></div>
+            <div><span>퇴실</span><b>{row.report?.attendance?.checkOut ?? '-'}</b></div>
+            <div><span>오늘</span><b>{formatMinutes(row.today)}</b></div>
+            <div><span>최근</span><b>{formatUpdatedAt(row.report?.updatedAt)}</b></div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AdminMentoringPage({ rows }) {
+  const taskRows = rows.flatMap((row) => (row.report?.tasks ?? []).map((task) => ({ row, task })));
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>medical_suite 멘토링 연동 데이터</h3>
+        <span>과제 완료 및 portalStatus 확인</span>
+      </div>
+      <div className="admin-list">
+        {taskRows.map(({ row, task }) => (
+          <article className="admin-list-card" key={`${row.id}-${task.id}`}>
+            <strong>{row.name} · {task.subject}</strong>
+            <span>{task.completed ? '완료' : '진행 중'} · {task.portalStatus}</span>
+            <p>{task.title}</p>
+            <em>{formatMinutes(Math.round((task.elapsedSeconds ?? 0) / 60))}</em>
+          </article>
+        ))}
+        {!taskRows.length ? <div className="admin-empty">멘토링 과제 데이터가 아직 없습니다.</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function readPenaltyAdjustments() {
+  try {
+    return JSON.parse(localStorage.getItem('admin-penalty-adjustments-v1') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function AdminPenaltiesPage({ rows }) {
+  const [adjustments, setAdjustments] = useState(readPenaltyAdjustments);
+
+  function updatePenalty(id, value) {
+    const next = { ...adjustments, [id]: Number(value) || 0 };
+    setAdjustments(next);
+    localStorage.setItem('admin-penalty-adjustments-v1', JSON.stringify(next));
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h3>벌점 관리 및 확인</h3>
+        <span>medipenalty 연동값 + 관리자 보정값</span>
+      </div>
+      <div className="admin-table">
+        {rows.map((row) => {
+          const manual = Number(adjustments[row.id] ?? 0);
+          return (
+            <article className="admin-row-card" key={row.id}>
+              <div>
+                <strong>{row.name}</strong>
+                <span>외부 {row.penalty}점 · 보정 {manual}점</span>
+              </div>
+              <div><span>합계</span><b>{row.penalty + manual}점</b></div>
+              <label className="admin-inline-input">
+                보정
+                <input type="number" value={manual} onChange={(event) => updatePenalty(row.id, event.target.value)} />
+              </label>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function StudentHome({
