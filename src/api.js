@@ -1,4 +1,5 @@
 const studycatApiBase = import.meta.env.VITE_STUDYCAT_API_BASE || 'https://medical-studycat.onrender.com/app-api';
+const studycatFallbackApiBase = import.meta.env.VITE_STUDYCAT_FALLBACK_API_BASE || 'https://medical-studycat.onrender.com/app-api';
 const parentToken = import.meta.env.VITE_STUDYCAT_PARENT_TOKEN || '';
 const configuredAdminToken = import.meta.env.VITE_STUDYCAT_ADMIN_TOKEN || '';
 const configuredMentoringToken = import.meta.env.VITE_MENTORING_TOKEN || '';
@@ -6,7 +7,15 @@ const mentoringApiBase = import.meta.env.VITE_MENTORING_API_BASE || 'https://men
 const medipenaltyApiBase = import.meta.env.VITE_MEDIPENALTY_API_BASE || 'https://medipenalty.kr/api';
 
 function studycatUrl(path, params = {}) {
-  const base = studycatApiBase.replace(/\/$/, '');
+  return studycatUrlForBase(studycatApiBase, path, params);
+}
+
+function studycatFallbackUrl(path, params = {}) {
+  return studycatUrlForBase(studycatFallbackApiBase, path, params);
+}
+
+function studycatUrlForBase(apiBase, path, params = {}) {
+  const base = apiBase.replace(/\/$/, '');
   const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
   const url = new URL(`${base}${path}`, origin);
   Object.entries(params).forEach(([key, value]) => {
@@ -71,6 +80,17 @@ async function fetchJson(url, options = {}) {
     throw error;
   }
   return payload;
+}
+
+async function fetchStudycatJson(path, params = {}, options = {}) {
+  try {
+    return await fetchJson(studycatUrl(path, params), options);
+  } catch (error) {
+    const primary = studycatUrl(path, params);
+    const fallback = studycatFallbackUrl(path, params);
+    if (primary === fallback) throw error;
+    return fetchJson(fallback, options);
+  }
 }
 
 function extractRows(payload) {
@@ -191,29 +211,23 @@ function normalizeMentoringResult(recordPayload, studentId, weekId) {
 }
 
 export async function loadStudycatFamilySnapshot(studentId) {
-  const response = await fetch(studycatUrl('/family/snapshot', { studentId }), {
+  return fetchStudycatJson('/family/snapshot', { studentId }, {
     headers: authHeaders(),
   });
-  if (!response.ok) throw new Error(`Studycat snapshot failed: HTTP ${response.status}`);
-  return response.json();
 }
 
 export async function loadStudycatStudents() {
-  const response = await fetch(studycatUrl('/students'), {
+  return fetchStudycatJson('/students', {}, {
     headers: authHeaders(),
   });
-  if (!response.ok) throw new Error(`Studycat students failed: HTTP ${response.status}`);
-  return response.json();
 }
 
 export async function sendStudycatAdminMessage({ recipientId, recipientName, body, adminToken }) {
-  const response = await fetch(studycatUrl('/messages'), {
+  return fetchStudycatJson('/messages', {}, {
     method: 'POST',
     headers: adminHeaders(adminToken),
     body: JSON.stringify({ recipientId, recipientName, body }),
   });
-  if (!response.ok) throw new Error(`Studycat message failed: HTTP ${response.status}`);
-  return response.json();
 }
 
 export function subscribeStudycatFamilySnapshot(studentId, onSnapshot, onError) {

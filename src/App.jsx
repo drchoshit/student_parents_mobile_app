@@ -94,6 +94,25 @@ const timeFilters = [
   { key: 'custom', label: '기간' },
 ];
 
+const emptyStudySummary = {
+  today: 0,
+  week: 0,
+  month: 0,
+  custom: 0,
+  streak: 0,
+  goal: 720,
+};
+
+const emptyWeeklyLearning = [
+  { day: '월', minutes: 0, completion: 0 },
+  { day: '화', minutes: 0, completion: 0 },
+  { day: '수', minutes: 0, completion: 0 },
+  { day: '목', minutes: 0, completion: 0 },
+  { day: '금', minutes: 0, completion: 0 },
+  { day: '토', minutes: 0, completion: 0 },
+  { day: '일', minutes: 0, completion: 0 },
+];
+
 function formatMinutes(minutes) {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -298,11 +317,11 @@ function penaltyPointFromRow(row) {
 
 const defaultSyncData = {
   userProfile,
-  studySummary,
-  subjectStudy,
-  weeklyLearning,
-  schedules: initialSchedules,
-  todos: initialTodos,
+  studySummary: emptyStudySummary,
+  subjectStudy: [],
+  weeklyLearning: emptyWeeklyLearning,
+  schedules: [],
+  todos: [],
   attendance,
   points,
   linkedSystems,
@@ -404,18 +423,26 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
     const livePenaltyPoint = penaltyPointFromRow(currentPenalty);
     const externalStudentName = currentPenalty?.name || userProfile.studentName;
     const fileAttendance = findExternalStudentRow(attendanceRows, linkedStudentId, externalStudentName);
+    const hasOperatingData = Boolean(currentPenalty || fileAttendance || mealSync.mealPlan.length);
     return {
       ...defaultSyncData,
       userProfile: {
         ...userProfile,
         studentName: externalStudentName,
         parentName: `${externalStudentName} 학부모`,
+        target: 'StudyCat 리포트 대기',
       },
-      attendance: buildAttendanceFromFile(fileAttendance, attendance),
-      points: [...(livePenaltyPoint ? [livePenaltyPoint] : []), ...points].slice(0, 8),
+      attendance: buildAttendanceFromFile(fileAttendance, {
+        status: 'StudyCat 출결 대기',
+        checkIn: '-',
+        checkOut: '-',
+        seat: '입퇴실 파일 대기',
+        timeline: [],
+      }),
+      points: livePenaltyPoint ? [livePenaltyPoint] : [],
       ...mealSync,
       linkedSystems: baseLinkedSystems.map((system) => (
-        system.name === 'StudyCat' ? { ...system, status: connectionState } : system
+        system.name === 'StudyCat' ? { ...system, status: 'StudyCat 리포트 없음' } : system
       )),
       reports,
       students,
@@ -426,7 +453,7 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
       mentoringTasks,
       mentoringStatus: operatingData.mentoringStatus || defaultSyncData.mentoringStatus,
       attendanceRows,
-      syncStatus: connectionState,
+      syncStatus: hasOperatingData ? '운영 데이터 연결됨 · StudyCat 리포트 없음' : connectionState,
     };
   }
 
@@ -441,8 +468,8 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
         goal: safeMinutes(report.studySummary.goal, studySummary.goal),
       }
     : {
-        ...studySummary,
-        today: safeMinutes(student?.todayMinutes, studySummary.today),
+        ...emptyStudySummary,
+        today: safeMinutes(student?.todayMinutes, emptyStudySummary.today),
       };
 
   const nextSubjectStudy = Array.isArray(report?.subjectStudy) && report.subjectStudy.length
@@ -452,7 +479,9 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
         color: item.color ?? subjectStudy[index % subjectStudy.length]?.color ?? '#12372f',
         note: item.note ?? 'Studycat 실시간',
       }))
-    : subjectStudy;
+    : student?.subject
+      ? [{ subject: student.subject, minutes: safeMinutes(student.todayMinutes), color: '#1f5a4a', note: 'StudyCat 학생 상태' }]
+      : [];
 
   const nextWeeklyLearning = Array.isArray(report?.weeklyLearning) && report.weeklyLearning.length
     ? report.weeklyLearning.map((item) => ({
@@ -460,15 +489,15 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
         minutes: safeMinutes(item.minutes),
         completion: safeMinutes(item.completion),
       }))
-    : weeklyLearning;
+    : emptyWeeklyLearning.map((item, index) => (index === 0 && student?.todayMinutes ? { ...item, minutes: safeMinutes(student.todayMinutes), completion: 0 } : item));
 
   const nextSchedules = Array.isArray(report?.schedules) && report.schedules.length
     ? report.schedules.map(toParentSchedule)
-    : initialSchedules;
+    : [];
 
   const nextTodos = Array.isArray(report?.tasks) && report.tasks.length
     ? report.tasks.map(toParentTodo)
-    : initialTodos;
+    : [];
 
   const nextAttendance = report?.attendance
     ? {
@@ -522,12 +551,16 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
     schedules: nextSchedules,
     todos: nextTodos,
     attendance: mergedAttendance,
-    points: [...rewardPoints, ...(livePenaltyPoint ? [livePenaltyPoint] : penaltyPoint), ...points].slice(0, 8),
+    points: [...rewardPoints, ...(livePenaltyPoint ? [livePenaltyPoint] : penaltyPoint)].slice(0, 8),
     linkedSystems: baseLinkedSystems.map((system) => (
       system.name === 'StudyCat'
         ? {
             ...system,
-            status: report ? `실시간 연결됨 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
+            status: report
+              ? `실시간 연결됨 · ${formatUpdatedAt(report.updatedAt)}`
+              : student
+                ? '학생 상태 연결됨 · family 리포트 대기'
+                : connectionState,
           }
         : system.name === '입퇴실 파일' && fileAttendance
           ? {
@@ -546,7 +579,11 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
     mentoringStatus: operatingData.mentoringStatus || defaultSyncData.mentoringStatus,
     attendanceRows,
     ...mealSync,
-    syncStatus: report ? `Studycat 동기화 완료 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
+    syncStatus: report
+      ? `Studycat 동기화 완료 · ${formatUpdatedAt(report.updatedAt)}`
+      : student
+        ? 'Studycat 학생 상태 연결됨 · family 리포트 대기'
+        : connectionState,
     updatedAt: report?.updatedAt ?? snapshot?.serverTime ?? null,
   };
 }
@@ -618,7 +655,7 @@ function App() {
         setSyncStatus('Studycat 실시간 연결됨');
       },
       () => {
-        if (!cancelled) setSyncStatus('Studycat 실시간 재연결 대기');
+        // Polling remains the source of truth; EventSource can emit transient retry events.
       },
     );
     const id = window.setInterval(refreshSnapshot, 30000);
@@ -1517,6 +1554,7 @@ function ParentHome({
   onNavigate,
 }) {
   const { studySummary, userProfile } = useSyncData();
+  const progress = studySummary.goal ? Math.min(100, Math.round((studySummary.week / (studySummary.goal * 7)) * 100)) : 0;
   return (
     <div className="screen-stack">
       <ParentStatusCard onNavigate={onNavigate} />
@@ -1525,7 +1563,7 @@ function ParentHome({
         label={`${userProfile.studentName} 학습 현황`}
         title={formatMinutes(studySummary[timeFilter])}
         caption={`이번 주 누적 ${formatMinutes(studySummary.week)}, ${studySummary.streak}일 연속 학습`}
-        progress={84}
+        progress={progress}
         progressLabel="주간"
       >
         <Segmented options={timeFilters} value={timeFilter} onChange={setTimeFilter} />
@@ -1904,8 +1942,9 @@ function SubjectTimeCard({ expanded = false }) {
         </div>
         <BookOpenCheck size={22} />
       </div>
-      <div className="subject-bars">
-        {subjectStudy.map((item) => (
+      {subjectStudy.length ? (
+        <div className="subject-bars">
+          {subjectStudy.map((item) => (
           <div className="subject-row" key={item.subject}>
             <div className="subject-label">
               <strong>{item.subject}</strong>
@@ -1921,11 +1960,14 @@ function SubjectTimeCard({ expanded = false }) {
             </div>
             {expanded && <small>{item.note}</small>}
           </div>
-        ))}
-      </div>
-      {expanded && (
+          ))}
+        </div>
+      ) : (
+        <div className="admin-empty">StudyCat 과목별 리포트가 아직 없습니다.</div>
+      )}
+      {expanded && total > 0 && (
         <div className="analysis-note">
-          수학 비중이 가장 높고 영어는 목표 대비 42분 부족합니다. StudyCat 연동 후 실제 누적값으로 대체됩니다.
+          StudyCat에서 받은 과목별 공부 시간 기준으로 표시합니다.
         </div>
       )}
     </section>
@@ -2197,10 +2239,11 @@ function PointsCard({ expanded = false }) {
             <b>{item.amount > 0 ? `+${item.amount}` : item.amount}</b>
           </article>
         ))}
+        {!points.length ? <div className="admin-empty">상벌점 운영 데이터가 아직 없습니다.</div> : null}
       </div>
-      {expanded && (
+      {expanded && points.length > 0 && (
         <div className="analysis-note">
-          생활 기록 파일이나 API가 연결되면 월별 누적과 사유별 필터를 추가합니다.
+          medipenalty 운영 사이트 누적값과 StudyCat 보상 데이터를 표시합니다.
         </div>
       )}
     </section>
