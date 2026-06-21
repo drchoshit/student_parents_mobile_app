@@ -39,15 +39,25 @@ import {
   initialSchedules,
   initialTodos,
   linkedSystems,
-  meals,
-  mentoringRecords,
   points,
   studySummary,
   subjectStudy,
   userProfile,
   weeklyLearning,
 } from './data/mockData.js';
-import { loadStudycatFamilySnapshot, loadStudycatStudents, sendStudycatAdminMessage, subscribeStudycatFamilySnapshot } from './api.js';
+import {
+  getDadaMealsForMonth,
+  getNextDadaMealAfter,
+  toDateKey,
+} from './data/dadaMeals2026June.js';
+import {
+  loadMedipenaltySummary,
+  loadMentoringPortal,
+  loadStudycatFamilySnapshot,
+  loadStudycatStudents,
+  sendStudycatAdminMessage,
+  subscribeStudycatFamilySnapshot,
+} from './api.js';
 
 const studentNav = [
   { id: 'home', label: '홈', icon: Home },
@@ -102,6 +112,190 @@ function createId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const MEAL_STORAGE_KEY = 'admin-meal-rows-v1';
+const ATTENDANCE_STORAGE_KEY = 'admin-attendance-rows-v1';
+const LOCAL_SYNC_EVENT = 'family-local-sync-updated';
+
+function emitLocalSyncUpdate() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(LOCAL_SYNC_EVENT));
+}
+
+function readStoredJson(key, fallback) {
+  if (typeof localStorage === 'undefined') return fallback;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '');
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+  emitLocalSyncUpdate();
+}
+
+function splitMealText(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || '')
+    .split(/\n|,|·/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function excelSerialToDate(value) {
+  const serial = Number(value);
+  if (!Number.isFinite(serial) || serial < 1) return '';
+  const excelEpoch = Date.UTC(1899, 11, 30);
+  const date = new Date(excelEpoch + serial * 24 * 60 * 60 * 1000);
+  return toDateKey(date);
+}
+
+function normalizeDateText(value, fallbackYear = 2026) {
+  if (value instanceof Date) return toDateKey(value);
+  if (typeof value === 'number') return excelSerialToDate(value);
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const isoMatch = text.match(/(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+  const monthDayMatch = text.match(/(\d{1,2})\D+(\d{1,2})/);
+  if (monthDayMatch) {
+    return `${fallbackYear}-${monthDayMatch[1].padStart(2, '0')}-${monthDayMatch[2].padStart(2, '0')}`;
+  }
+  return text;
+}
+
+function seedMealRows() {
+  return getDadaMealsForMonth('2026-06').map((meal) => ({
+    ...meal,
+    id: `dada-${meal.date}`,
+    note: meal.source,
+  }));
+}
+
+function readStoredMeals() {
+  const rows = readStoredJson(MEAL_STORAGE_KEY, []);
+  return Array.isArray(rows) && rows.length ? rows : seedMealRows();
+}
+
+function normalizeMealRow(row, index) {
+  const keys = Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase(), value]));
+  const date = normalizeDateText(keys.date ?? keys['날짜'] ?? keys.day ?? keys['일자'] ?? keys['월일']);
+  return {
+    id: `meal-${date || index}-${Date.now()}`,
+    date,
+    lunch: splitMealText(keys.lunch ?? keys['점심'] ?? keys['중식'] ?? keys['lunch menu']),
+    dinner: splitMealText(keys.dinner ?? keys['저녁'] ?? keys['석식'] ?? keys['dinner menu']),
+    kcal: String(keys.kcal ?? keys['칼로리'] ?? '').trim(),
+    note: String(keys.note ?? keys['비고'] ?? '').trim(),
+    source: '관리자 업로드 엑셀',
+  };
+}
+
+function mealForDate(rows, value = new Date()) {
+  const dateKey = toDateKey(value);
+  return rows.find((meal) => meal.date === dateKey) ?? null;
+}
+
+function nextMealAfter(rows, value = new Date()) {
+  const dateKey = toDateKey(value);
+  return rows.find((meal) => meal.date > dateKey) ?? getNextDadaMealAfter(value);
+}
+
+function buildMealSync(mealRows = readStoredMeals()) {
+  const plan = Array.isArray(mealRows) && mealRows.length ? mealRows : seedMealRows();
+  const todayMeal = mealForDate(plan);
+  return {
+    mealPlan: plan,
+    todayMeal,
+    nextMeal: todayMeal ? null : nextMealAfter(plan),
+    mealStatus: plan.some((meal) => String(meal.id || '').startsWith('dada-'))
+      ? `다다익찬 2026년 6월 이미지 메뉴 적용됨 · ${plan.length}일`
+      : `관리자 엑셀 업로드 반영됨 · ${plan.length}건`,
+  };
+}
+
+function readStoredAttendanceRows() {
+  const rows = readStoredJson(ATTENDANCE_STORAGE_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function normalizeAttendanceRow(row, index) {
+  const keys = Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase(), value]));
+  const studentId = String(keys.studentid ?? keys.student_id ?? keys.id ?? keys['학생id'] ?? keys['아이디'] ?? '').trim();
+  const name = String(keys.name ?? keys.studentname ?? keys.student_name ?? keys['이름'] ?? keys['학생명'] ?? '').trim();
+  const status = String(keys.status ?? keys['상태'] ?? keys['구분'] ?? keys.type ?? '').trim();
+  const checkIn = String(keys.checkin ?? keys.check_in ?? keys['입실'] ?? keys['등원'] ?? '').trim();
+  const checkOut = String(keys.checkout ?? keys.check_out ?? keys['퇴실'] ?? keys['하원'] ?? '').trim();
+  const out = String(keys.out ?? keys['외출'] ?? '').trim();
+  const back = String(keys.back ?? keys['복귀'] ?? '').trim();
+  const time = String(keys.time ?? keys['시간'] ?? '').trim();
+  const seat = String(keys.seat ?? keys['좌석'] ?? keys.room ?? keys['자리'] ?? '').trim();
+  return {
+    id: `attendance-${studentId || name || index}-${Date.now()}`,
+    studentId,
+    name,
+    status: status || (checkOut ? '하원' : checkIn ? '입실 중' : '기록 있음'),
+    checkIn,
+    checkOut,
+    out,
+    back,
+    time,
+    seat,
+    note: String(keys.note ?? keys['비고'] ?? '').trim(),
+    source: '관리자 업로드 입퇴실 파일',
+  };
+}
+
+function readLocalAssets() {
+  return {
+    mealRows: readStoredMeals(),
+    attendanceRows: readStoredAttendanceRows(),
+  };
+}
+
+function findExternalStudentRow(rows, studentId, studentName) {
+  const id = String(studentId || '').trim();
+  const name = String(studentName || '').trim();
+  return (rows ?? []).find((row) => String(row.id || '').trim() === id)
+    ?? (rows ?? []).find((row) => String(row.studentId || '').trim() === id)
+    ?? (rows ?? []).find((row) => name && String(row.name || '').trim() === name)
+    ?? null;
+}
+
+function buildAttendanceFromFile(row, fallback) {
+  if (!row) return fallback;
+  const timeline = [
+    row.checkIn ? { time: row.checkIn, label: '입실 완료', tone: 'good' } : null,
+    row.out ? { time: row.out, label: '외출', tone: 'neutral' } : null,
+    row.back ? { time: row.back, label: '복귀', tone: 'good' } : null,
+    row.checkOut ? { time: row.checkOut, label: '하원 완료', tone: 'neutral' } : null,
+  ].filter(Boolean);
+  return {
+    ...fallback,
+    status: row.status || fallback.status,
+    checkIn: row.checkIn || fallback.checkIn || '-',
+    checkOut: row.checkOut || fallback.checkOut || '-',
+    seat: row.seat || fallback.seat,
+    timeline: timeline.length ? timeline : fallback.timeline,
+  };
+}
+
+function penaltyPointFromRow(row) {
+  if (!row) return null;
+  const value = Number(row.points || 0);
+  if (!Number.isFinite(value) || value === 0) return null;
+  return {
+    id: `medipenalty-${row.id}`,
+    type: value > 0 ? '벌점' : '상점',
+    amount: value > 0 ? -Math.abs(value) : Math.abs(value),
+    reason: 'medipenalty 운영 사이트 누적',
+    date: row.updatedAt ? formatUpdatedAt(row.updatedAt) : '실시간',
+  };
+}
+
 const defaultSyncData = {
   userProfile,
   studySummary,
@@ -114,6 +308,14 @@ const defaultSyncData = {
   linkedSystems,
   students: [],
   reports: [],
+  penaltyRows: [],
+  penaltyStatus: 'medipenalty 연결 전',
+  currentPenalty: null,
+  mentoringRecords: [],
+  mentoringTasks: [],
+  mentoringStatus: 'medical_suite 토큰 필요',
+  attendanceRows: [],
+  ...buildMealSync(),
   syncStatus: 'Studycat 연결 대기',
   updatedAt: null,
 };
@@ -166,16 +368,64 @@ function studycatStatusText(student) {
   return '최근 기록 대기';
 }
 
-function buildSyncData(snapshot, linkedStudentId, connectionState) {
+function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData = {}, localAssets = readLocalAssets()) {
   const report = snapshot?.report ?? snapshot?.reports?.[0] ?? null;
   const student = snapshot?.students?.find((item) => item.id === linkedStudentId) ?? snapshot?.students?.[0] ?? null;
   const reports = Array.isArray(snapshot?.reports) ? snapshot.reports : report ? [report] : [];
   const students = Array.isArray(snapshot?.students) ? snapshot.students : [];
+  const penaltyRows = Array.isArray(operatingData.penaltyRows) ? operatingData.penaltyRows : [];
+  const mentoringRecords = Array.isArray(operatingData.mentoringRecords) ? operatingData.mentoringRecords : [];
+  const mentoringTasks = Array.isArray(operatingData.mentoringTasks) ? operatingData.mentoringTasks : [];
+  const attendanceRows = Array.isArray(localAssets.attendanceRows) ? localAssets.attendanceRows : [];
+  const mealSync = buildMealSync(localAssets.mealRows);
+  const baseLinkedSystems = linkedSystems.map((system) => {
+    if (system.name === 'medical_suite 멘토링 포털') {
+      return {
+        ...system,
+        status: operatingData.mentoringStatus || 'medical_suite 토큰 필요',
+      };
+    }
+    if (system.name === '식단 엑셀') {
+      return {
+        ...system,
+        status: mealSync.mealStatus,
+      };
+    }
+    if (system.name === '입퇴실 파일') {
+      return {
+        ...system,
+        status: attendanceRows.length ? `관리자 업로드 ${attendanceRows.length}건 반영됨` : 'StudyCat 출결 또는 파일 업로드 대기',
+      };
+    }
+    return system;
+  });
   if (!report && !student) {
+    const currentPenalty = findExternalStudentRow(penaltyRows, linkedStudentId, '');
+    const livePenaltyPoint = penaltyPointFromRow(currentPenalty);
+    const externalStudentName = currentPenalty?.name || userProfile.studentName;
+    const fileAttendance = findExternalStudentRow(attendanceRows, linkedStudentId, externalStudentName);
     return {
       ...defaultSyncData,
+      userProfile: {
+        ...userProfile,
+        studentName: externalStudentName,
+        parentName: `${externalStudentName} 학부모`,
+      },
+      attendance: buildAttendanceFromFile(fileAttendance, attendance),
+      points: [...(livePenaltyPoint ? [livePenaltyPoint] : []), ...points].slice(0, 8),
+      ...mealSync,
+      linkedSystems: baseLinkedSystems.map((system) => (
+        system.name === 'StudyCat' ? { ...system, status: connectionState } : system
+      )),
       reports,
       students,
+      penaltyRows,
+      penaltyStatus: operatingData.penaltyStatus || defaultSyncData.penaltyStatus,
+      currentPenalty,
+      mentoringRecords,
+      mentoringTasks,
+      mentoringStatus: operatingData.mentoringStatus || defaultSyncData.mentoringStatus,
+      attendanceRows,
       syncStatus: connectionState,
     };
   }
@@ -234,6 +484,9 @@ function buildSyncData(snapshot, linkedStudentId, connectionState) {
         ...attendance,
         status: studycatStatusText(student),
       };
+  const fileAttendance = findExternalStudentRow(attendanceRows, linkedStudentId, nextStudentName);
+  const mergedAttendance = buildAttendanceFromFile(fileAttendance, nextAttendance);
+  const currentPenalty = findExternalStudentRow(penaltyRows, linkedStudentId, nextStudentName);
 
   const rewardPoints = report?.rewards
     ? [{
@@ -244,7 +497,8 @@ function buildSyncData(snapshot, linkedStudentId, connectionState) {
         date: '실시간',
       }]
     : [];
-  const penaltyPoint = report?.penalty
+  const livePenaltyPoint = penaltyPointFromRow(currentPenalty);
+  const penaltyPoint = !livePenaltyPoint && report?.penalty
     ? [{
         id: 'studycat-penalty',
         type: '벌점',
@@ -267,18 +521,31 @@ function buildSyncData(snapshot, linkedStudentId, connectionState) {
     weeklyLearning: nextWeeklyLearning,
     schedules: nextSchedules,
     todos: nextTodos,
-    attendance: nextAttendance,
-    points: [...rewardPoints, ...penaltyPoint, ...points].slice(0, 8),
-    linkedSystems: linkedSystems.map((system) => (
+    attendance: mergedAttendance,
+    points: [...rewardPoints, ...(livePenaltyPoint ? [livePenaltyPoint] : penaltyPoint), ...points].slice(0, 8),
+    linkedSystems: baseLinkedSystems.map((system) => (
       system.name === 'StudyCat'
         ? {
             ...system,
             status: report ? `실시간 연결됨 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
           }
+        : system.name === '입퇴실 파일' && fileAttendance
+          ? {
+              ...system,
+              status: `입퇴실 파일 반영됨 · ${fileAttendance.time || fileAttendance.checkIn || fileAttendance.checkOut || '최근 업로드'}`,
+            }
         : system
     )),
     students,
     reports,
+    penaltyRows,
+    penaltyStatus: operatingData.penaltyStatus || defaultSyncData.penaltyStatus,
+    currentPenalty,
+    mentoringRecords,
+    mentoringTasks,
+    mentoringStatus: operatingData.mentoringStatus || defaultSyncData.mentoringStatus,
+    attendanceRows,
+    ...mealSync,
     syncStatus: report ? `Studycat 동기화 완료 · ${formatUpdatedAt(report.updatedAt)}` : connectionState,
     updatedAt: report?.updatedAt ?? snapshot?.serverTime ?? null,
   };
@@ -300,11 +567,29 @@ function App() {
   );
   const [familySnapshot, setFamilySnapshot] = useState(null);
   const [syncStatus, setSyncStatus] = useState('Studycat 연결 대기');
+  const [localAssets, setLocalAssets] = useState(readLocalAssets);
+  const [operatingData, setOperatingData] = useState({
+    penaltyRows: [],
+    penaltyStatus: 'medipenalty 연결 전',
+    mentoringRecords: [],
+    mentoringTasks: [],
+    mentoringStatus: 'medical_suite 토큰 필요',
+  });
 
   const syncData = useMemo(
-    () => buildSyncData(familySnapshot, linkedStudentId, syncStatus),
-    [familySnapshot, linkedStudentId, syncStatus],
+    () => buildSyncData(familySnapshot, linkedStudentId, syncStatus, operatingData, localAssets),
+    [familySnapshot, linkedStudentId, localAssets, operatingData, syncStatus],
   );
+
+  useEffect(() => {
+    const refreshLocalAssets = () => setLocalAssets(readLocalAssets());
+    window.addEventListener(LOCAL_SYNC_EVENT, refreshLocalAssets);
+    window.addEventListener('storage', refreshLocalAssets);
+    return () => {
+      window.removeEventListener(LOCAL_SYNC_EVENT, refreshLocalAssets);
+      window.removeEventListener('storage', refreshLocalAssets);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -341,6 +626,48 @@ function App() {
     return () => {
       cancelled = true;
       unsubscribe();
+      window.clearInterval(id);
+    };
+  }, [linkedStudentId, sessionRole]);
+
+  useEffect(() => {
+    if (!sessionRole) return undefined;
+    let cancelled = false;
+
+    async function refreshOperatingData() {
+      const [penaltyResult, mentoringResult] = await Promise.allSettled([
+        loadMedipenaltySummary(),
+        sessionRole === 'admin'
+          ? Promise.resolve({ records: [], tasks: [], status: '학생 선택 시 medical_suite 조회' })
+          : loadMentoringPortal(linkedStudentId),
+      ]);
+      if (cancelled) return;
+
+      setOperatingData((current) => {
+        const next = { ...current };
+        if (penaltyResult.status === 'fulfilled') {
+          next.penaltyRows = penaltyResult.value.rows;
+          next.penaltyStatus = `${penaltyResult.value.status} · ${formatUpdatedAt(penaltyResult.value.updatedAt)}`;
+        } else {
+          next.penaltyStatus = 'medipenalty 연결 실패';
+        }
+        if (mentoringResult.status === 'fulfilled') {
+          next.mentoringRecords = mentoringResult.value.records;
+          next.mentoringTasks = mentoringResult.value.tasks;
+          next.mentoringStatus = mentoringResult.value.updatedAt
+            ? `${mentoringResult.value.status} · ${formatUpdatedAt(mentoringResult.value.updatedAt)}`
+            : mentoringResult.value.status;
+        } else {
+          next.mentoringStatus = 'medical_suite 연결 실패';
+        }
+        return next;
+      });
+    }
+
+    void refreshOperatingData();
+    const id = window.setInterval(refreshOperatingData, 30000);
+    return () => {
+      cancelled = true;
       window.clearInterval(id);
     };
   }, [linkedStudentId, sessionRole]);
@@ -499,7 +826,7 @@ function LoginScreen({ role, setRole, linkedStudentId, onLogin }) {
         {error ? <div className="login-error">{error}</div> : null}
 
         <button className="primary-action" type="button" onClick={handleSubmit}>
-          {role === 'student' ? '학생 페이지로 들어가기' : '학부모 페이지로 들어가기'}
+          {role === 'student' ? '학생 페이지로 들어가기' : role === 'admin' ? '관리자 페이지로 들어가기' : '학부모 페이지로 들어가기'}
           <ChevronRight size={20} />
         </button>
 
@@ -596,11 +923,16 @@ function ParentRoutes(props) {
 
 function getAdminRows(syncData) {
   const studentMap = new Map((syncData.students ?? []).map((student) => [student.id, student]));
+  const penaltyRows = Array.isArray(syncData.penaltyRows) ? syncData.penaltyRows : [];
+  const attendanceRows = Array.isArray(syncData.attendanceRows) ? syncData.attendanceRows : [];
   const reportRows = (syncData.reports ?? []).map((report) => {
     const student = studentMap.get(report.studentId) ?? {};
+    const name = report.studentName || report.profile?.studentName || student.name || report.studentId;
+    const penalty = findExternalStudentRow(penaltyRows, report.studentId, name);
+    const attendanceFile = findExternalStudentRow(attendanceRows, report.studentId, name);
     return {
       id: report.studentId,
-      name: report.studentName || report.profile?.studentName || student.name || report.studentId,
+      name,
       status: student.status || report.attendance?.status || 'offline',
       subject: student.subject || report.subjectStudy?.[0]?.subject || '-',
       today: safeMinutes(report.studySummary?.today),
@@ -608,7 +940,9 @@ function getAdminRows(syncData) {
       month: safeMinutes(report.studySummary?.month),
       completion: safeMinutes(report.analysis?.completionRate),
       focus: safeMinutes(report.analysis?.focusScore),
-      penalty: safeMinutes(report.penalty?.points),
+      penalty: Number.isFinite(Number(penalty?.points)) ? Number(penalty.points) : safeMinutes(report.penalty?.points),
+      penaltyUpdatedAt: penalty?.updatedAt,
+      attendanceFile,
       report,
       student,
     };
@@ -617,22 +951,52 @@ function getAdminRows(syncData) {
   const reportedIds = new Set(reportRows.map((row) => row.id));
   const liveOnlyRows = [...studentMap.values()]
     .filter((student) => !reportedIds.has(student.id))
-    .map((student) => ({
-      id: student.id,
-      name: student.name || student.id,
-      status: student.status || 'offline',
-      subject: student.subject || '-',
-      today: safeMinutes(student.todayMinutes),
-      week: 0,
-      month: 0,
-      completion: 0,
-      focus: 0,
-      penalty: 0,
-      report: null,
-      student,
-    }));
+    .map((student) => {
+      const penalty = findExternalStudentRow(penaltyRows, student.id, student.name);
+      const attendanceFile = findExternalStudentRow(attendanceRows, student.id, student.name);
+      return {
+        id: student.id,
+        name: student.name || student.id,
+        status: student.status || 'offline',
+        subject: student.subject || '-',
+        today: safeMinutes(student.todayMinutes),
+        week: 0,
+        month: 0,
+        completion: 0,
+        focus: 0,
+        penalty: Number(penalty?.points ?? 0),
+        penaltyUpdatedAt: penalty?.updatedAt,
+        attendanceFile,
+        report: null,
+        student,
+      };
+    });
 
-  return [...reportRows, ...liveOnlyRows].sort((a, b) => b.today - a.today || a.name.localeCompare(b.name, 'ko-KR'));
+  const knownIds = new Set([...reportRows, ...liveOnlyRows].map((row) => row.id));
+  const knownNames = new Set([...reportRows, ...liveOnlyRows].map((row) => row.name));
+  const externalOnlyRows = penaltyRows
+    .filter((row) => !knownIds.has(row.id) && !knownNames.has(row.name))
+    .map((row) => {
+      const attendanceFile = findExternalStudentRow(attendanceRows, row.id, row.name);
+      return {
+        id: row.id,
+        name: row.name || row.id,
+        status: '운영 사이트',
+        subject: '-',
+        today: 0,
+        week: 0,
+        month: 0,
+        completion: 0,
+        focus: 0,
+        penalty: Number(row.points || 0),
+        penaltyUpdatedAt: row.updatedAt,
+        attendanceFile,
+        report: null,
+        student: null,
+      };
+    });
+
+  return [...reportRows, ...liveOnlyRows, ...externalOnlyRows].sort((a, b) => b.today - a.today || a.name.localeCompare(b.name, 'ko-KR'));
 }
 
 function AdminRoutes({ activeTab, setActiveTab, adminToken }) {
@@ -840,29 +1204,11 @@ function AdminSchedulesPage({ rows }) {
   );
 }
 
-function readStoredMeals() {
-  try {
-    return JSON.parse(localStorage.getItem('admin-meal-rows-v1') || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function normalizeMealRow(row, index) {
-  const keys = Object.fromEntries(Object.entries(row).map(([key, value]) => [String(key).trim().toLowerCase(), value]));
-  return {
-    id: `meal-${index}-${Date.now()}`,
-    date: String(keys.date ?? keys['날짜'] ?? keys.day ?? keys['일자'] ?? '').trim(),
-    lunch: String(keys.lunch ?? keys['점심'] ?? keys['중식'] ?? '').trim(),
-    dinner: String(keys.dinner ?? keys['저녁'] ?? keys['석식'] ?? '').trim(),
-    kcal: String(keys.kcal ?? keys['칼로리'] ?? '').trim(),
-    note: String(keys.note ?? keys['비고'] ?? '').trim(),
-  };
-}
-
 function AdminMealsPage() {
   const [meals, setMeals] = useState(readStoredMeals);
-  const [fileName, setFileName] = useState('');
+  const [fileName, setFileName] = useState(() => (
+    meals.some((meal) => String(meal.id || '').startsWith('dada-')) ? '첨부 이미지 메뉴 적용됨' : '관리자 업로드 메뉴'
+  ));
 
   async function handleMealFile(event) {
     const file = event.target.files?.[0];
@@ -874,7 +1220,14 @@ function AdminMealsPage() {
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).map(normalizeMealRow).filter((row) => row.date || row.lunch || row.dinner);
     setMeals(rows);
     setFileName(file.name);
-    localStorage.setItem('admin-meal-rows-v1', JSON.stringify(rows));
+    writeStoredJson(MEAL_STORAGE_KEY, rows);
+  }
+
+  function applySeedMenu() {
+    const rows = seedMealRows();
+    setMeals(rows);
+    setFileName('첨부 이미지 메뉴 적용됨');
+    writeStoredJson(MEAL_STORAGE_KEY, rows);
   }
 
   return (
@@ -891,13 +1244,16 @@ function AdminMealsPage() {
         </div>
         <input type="file" accept=".xlsx,.xls,.csv" onChange={handleMealFile} />
       </label>
+      <button className="admin-secondary-action" type="button" onClick={applySeedMenu}>
+        2026년 6월 이미지 메뉴 적용
+      </button>
       <div className="admin-list">
         {meals.slice(0, 40).map((meal) => (
           <article className="admin-list-card" key={meal.id}>
             <strong>{meal.date || '날짜 없음'}</strong>
-            <span>점심: {meal.lunch || '-'}</span>
-            <p>저녁: {meal.dinner || '-'}</p>
-            <em>{meal.kcal || meal.note || '도시락'}</em>
+            <span>점심: {splitMealText(meal.lunch).join(' / ') || '-'}</span>
+            <p>저녁: {splitMealText(meal.dinner).join(' / ') || '-'}</p>
+            <em>{meal.kcal || meal.note || meal.source || '도시락'}</em>
           </article>
         ))}
         {!meals.length ? <div className="admin-empty">업로드된 도시락 파일이 없습니다.</div> : null}
@@ -957,39 +1313,76 @@ function AdminMessagesPage({ rows, adminToken }) {
 }
 
 function AdminAttendancePage({ rows }) {
+  const [attendanceUploads, setAttendanceUploads] = useState(readStoredAttendanceRows);
+  const [fileName, setFileName] = useState('');
+
+  async function handleAttendanceFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const XLSX = await import('xlsx');
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const nextRows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      .map(normalizeAttendanceRow)
+      .filter((row) => row.studentId || row.name || row.checkIn || row.checkOut || row.time);
+    setAttendanceUploads(nextRows);
+    setFileName(file.name);
+    writeStoredJson(ATTENDANCE_STORAGE_KEY, nextRows);
+  }
+
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
         <h3>학생별 입퇴실 확인</h3>
-        <span>Studycat 타이머 기록 기반</span>
+        <span>{fileName || `Studycat 기록 + 업로드 ${attendanceUploads.length}건`}</span>
       </div>
+      <label className="admin-upload">
+        <FileSpreadsheet size={22} />
+        <div>
+          <strong>입퇴실 파일 선택</strong>
+          <span>권장 컬럼: 학생ID, 이름, 상태, 입실, 하원, 외출, 복귀, 좌석</span>
+        </div>
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleAttendanceFile} />
+      </label>
       <div className="admin-table">
         {rows.map((row) => (
           <article className="admin-row-card" key={row.id}>
             <div>
               <strong>{row.name}</strong>
-              <span>{row.report?.attendance?.status ?? row.status}</span>
+              <span>{row.attendanceFile?.status ?? row.report?.attendance?.status ?? row.status}</span>
             </div>
-            <div><span>입실</span><b>{row.report?.attendance?.checkIn ?? '-'}</b></div>
-            <div><span>퇴실</span><b>{row.report?.attendance?.checkOut ?? '-'}</b></div>
+            <div><span>입실</span><b>{row.attendanceFile?.checkIn || row.report?.attendance?.checkIn || '-'}</b></div>
+            <div><span>퇴실</span><b>{row.attendanceFile?.checkOut || row.report?.attendance?.checkOut || '-'}</b></div>
             <div><span>오늘</span><b>{formatMinutes(row.today)}</b></div>
             <div><span>최근</span><b>{formatUpdatedAt(row.report?.updatedAt)}</b></div>
           </article>
         ))}
+        {!rows.length ? <div className="admin-empty">표시할 학생 데이터가 없습니다.</div> : null}
       </div>
     </section>
   );
 }
 
 function AdminMentoringPage({ rows }) {
+  const syncData = useSyncData();
+  const portalRecords = syncData.mentoringRecords ?? [];
   const taskRows = rows.flatMap((row) => (row.report?.tasks ?? []).map((task) => ({ row, task })));
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
         <h3>medical_suite 멘토링 연동 데이터</h3>
-        <span>과제 완료 및 portalStatus 확인</span>
+        <span>{syncData.mentoringStatus}</span>
       </div>
       <div className="admin-list">
+        {portalRecords.map((record) => (
+          <article className="admin-list-card" key={`${record.studentId || 'portal'}-${record.week}-${record.focus}`}>
+            <strong>{record.week} · {record.mentor}</strong>
+            <span>{record.focus}</span>
+            <p>{record.memo}</p>
+            <em>{record.next}</em>
+          </article>
+        ))}
         {taskRows.map(({ row, task }) => (
           <article className="admin-list-card" key={`${row.id}-${task.id}`}>
             <strong>{row.name} · {task.subject}</strong>
@@ -998,7 +1391,7 @@ function AdminMentoringPage({ rows }) {
             <em>{formatMinutes(Math.round((task.elapsedSeconds ?? 0) / 60))}</em>
           </article>
         ))}
-        {!taskRows.length ? <div className="admin-empty">멘토링 과제 데이터가 아직 없습니다.</div> : null}
+        {!portalRecords.length && !taskRows.length ? <div className="admin-empty">멘토링 포털 토큰이 없거나 과제 데이터가 아직 없습니다.</div> : null}
       </div>
     </section>
   );
@@ -1096,7 +1489,7 @@ function StudentHome({
         <FeatureTile
           icon={NotebookPen}
           title="일정과 할일"
-          detail="StudyCat 양방향 연동 예정"
+          detail="StudyCat 리포트 반영"
           onClick={() => onNavigate('plan')}
         />
       </section>
@@ -1161,7 +1554,7 @@ function ParentHome({
         <FeatureTile
           icon={MessageSquareText}
           title="주간 멘토링"
-          detail="멘토링 포털 연동 예정"
+          detail="medical_suite 포털 연동"
           onClick={() => onNavigate('mentoring')}
         />
       </section>
@@ -1232,7 +1625,7 @@ function LearningPage({ timeFilter, setTimeFilter, audience }) {
       <SectionHeader
         icon={BarChart3}
         title={audience === 'parent' ? '학습 현황' : '내 학습 분석'}
-        subtitle="StudyCat 공부 시간 데이터가 연결되면 같은 구조로 실시간 반영됩니다."
+        subtitle="StudyCat 공부 시간과 과목별 통계가 같은 구조로 실시간 반영됩니다."
       />
       <HeroPanel
         label="선택 기간 누적"
@@ -1370,7 +1763,7 @@ function PlanPage({ schedules, setSchedules, todos, setTodos, role }) {
         subtitle={
           readonly
             ? '학부모는 학생의 오늘 계획과 완료 상태를 확인합니다.'
-            : '학생은 일정을 등록하고 할일을 체크할 수 있습니다. StudyCat과 양방향 연동될 영역입니다.'
+            : '학생은 일정을 등록하고 할일을 체크할 수 있습니다. StudyCat 리포트와 같은 화면에서 확인합니다.'
         }
       />
       <PlanPreview
@@ -1392,7 +1785,7 @@ function MealPage() {
       <SectionHeader
         icon={Salad}
         title="오늘의 식단"
-        subtitle="점심과 저녁 메뉴 엑셀 파일을 받으면 이 화면에 자동 연결합니다."
+        subtitle="첨부된 다다익찬 2026년 6월 도시락 메뉴와 관리자 업로드 엑셀을 자동 반영합니다."
       />
       <MealCard expanded />
       <IntegrationCard />
@@ -1407,7 +1800,7 @@ function AttendancePage() {
       <SectionHeader
         icon={DoorOpen}
         title="입퇴실 현황"
-        subtitle="추후 제공될 입퇴실 파일 포맷에 맞춰 자동 반영합니다."
+        subtitle="StudyCat 출결과 관리자 입퇴실 파일 업로드 데이터를 자동 반영합니다."
       />
       <section className="attendance-hero">
         <div>
@@ -1442,12 +1835,14 @@ function AttendancePage() {
 }
 
 function MentoringPage() {
+  const { mentoringRecords, mentoringStatus, todos } = useSyncData();
+  const fallbackTasks = mentoringRecords.length ? [] : todos.filter((todo) => todo.title);
   return (
     <div className="screen-stack">
       <SectionHeader
         icon={MessageSquareText}
         title="주간 멘토링 기록"
-        subtitle="medical_suite 멘토링 포털 데이터를 이곳으로 옮겨올 예정입니다."
+        subtitle={mentoringStatus}
       />
       {mentoringRecords.map((record) => (
         <section className="mentoring-card" key={record.week}>
@@ -1463,6 +1858,21 @@ function MentoringPage() {
           </div>
         </section>
       ))}
+      {!mentoringRecords.length && fallbackTasks.map((task) => (
+        <section className="mentoring-card" key={task.id}>
+          <div className="card-topline">
+            <span>StudyCat 과제</span>
+            <strong>{task.done ? '완료' : '진행 중'}</strong>
+          </div>
+          <h3>{task.title}</h3>
+          <p>medical_suite 토큰이 설정되면 주간 멘토링 기록과 다음 주 액션으로 자동 대체됩니다.</p>
+        </section>
+      ))}
+      {!mentoringRecords.length && !fallbackTasks.length ? (
+        <section className="data-card">
+          <div className="analysis-note">medical_suite 포털 토큰이 없거나 해당 학생의 멘토링 기록이 아직 없습니다.</div>
+        </section>
+      ) : null}
       <IntegrationCard />
     </div>
   );
@@ -1522,23 +1932,36 @@ function SubjectTimeCard({ expanded = false }) {
   );
 }
 
+function formatMealDate(dateKey) {
+  if (!dateKey) return '날짜 없음';
+  const [, , month, day] = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+  return month && day ? `${Number(month)}월 ${Number(day)}일` : dateKey;
+}
+
 function MealCard({ expanded = false }) {
+  const { todayMeal, nextMeal, mealStatus } = useSyncData();
+  const meal = todayMeal ?? nextMeal;
+  const label = todayMeal ? '오늘의 식단' : '다음 등록 식단';
   return (
     <section className="data-card">
       <div className="card-header">
         <div>
-          <p>오늘의 식단</p>
-          <h3>점심 · 저녁</h3>
+          <p>{label}</p>
+          <h3>{meal ? formatMealDate(meal.date) : '등록된 메뉴 없음'}</h3>
         </div>
         <Salad size={22} />
       </div>
-      <div className="meal-grid">
-        <MealItem label="점심" meal={meals.lunch} />
-        <MealItem label="저녁" meal={meals.dinner} />
-      </div>
+      {meal ? (
+        <div className="meal-grid">
+          <MealItem label="점심" meal={meal.lunch} />
+          <MealItem label="저녁" meal={meal.dinner} />
+        </div>
+      ) : (
+        <div className="admin-empty">표시할 도시락 메뉴가 없습니다.</div>
+      )}
       {expanded && (
         <div className="analysis-note">
-          현재는 샘플 메뉴입니다. 식단 엑셀 파일을 받으면 날짜별 메뉴 조회 구조로 확장합니다.
+          {todayMeal ? mealStatus : `오늘 등록된 도시락은 없습니다. ${meal ? `${formatMealDate(meal.date)} 메뉴를 미리 보여줍니다.` : mealStatus}`}
         </div>
       )}
     </section>
@@ -1546,12 +1969,13 @@ function MealCard({ expanded = false }) {
 }
 
 function MealItem({ label, meal }) {
+  const items = splitMealText(meal);
   return (
     <div className="meal-item">
       <span>{label}</span>
-      <strong>{meal.title}</strong>
-      <p>{meal.side}</p>
-      <small>{meal.kcal} kcal</small>
+      <strong>{items[0] || '-'}</strong>
+      <p>{items.slice(1).join(' / ') || '추가 메뉴 없음'}</p>
+      <small>{items.length ? '다다익찬 도시락' : '메뉴 없음'}</small>
     </div>
   );
 }
@@ -1789,8 +2213,8 @@ function IntegrationCard() {
     <section className="integration-card">
       <div className="card-header">
         <div>
-          <p>연동 설계</p>
-          <h3>나중에 붙일 데이터 소스</h3>
+          <p>실시간 연동 상태</p>
+          <h3>학생·학부모 데이터 소스</h3>
         </div>
         <Sparkles size={22} />
         <span>{syncStatus}</span>

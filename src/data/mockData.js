@@ -7,22 +7,22 @@ export const centerInfo = {
 export const linkedSystems = [
   {
     name: 'StudyCat',
-    scope: '공부 시간, 과목별 통계, 일정, 할일을 양방향 동기화할 예정입니다.',
+    scope: '공부 시간, 과목별 통계, 일정, 할일을 StudyCat family API에서 실시간으로 불러옵니다.',
     status: 'API 연결 대기',
   },
   {
     name: 'medical_suite 멘토링 포털',
-    scope: '주간 멘토링 기록과 다음 주 학습 액션을 불러올 예정입니다.',
+    scope: '토큰이 설정되면 주간 멘토링 기록과 다음 주 학습 액션을 불러옵니다.',
     status: '데이터 연결 대기',
   },
   {
     name: '식단 엑셀',
-    scope: '점심과 저녁 메뉴 파일을 업로드하면 오늘 식단에 자동 반영합니다.',
+    scope: '첨부 이미지의 2026년 6월 메뉴를 기본 적용하고, 엑셀 업로드 시 자동 교체합니다.',
     status: '엑셀 템플릿 대기',
   },
   {
     name: '입퇴실 파일',
-    scope: '등원, 하원, 외출, 복귀 기록을 학부모 화면에 반영합니다.',
+    scope: '등원, 하원, 외출, 복귀 파일을 업로드하면 학부모 출결 화면에 반영합니다.',
     status: '파일 포맷 대기',
   },
 ];

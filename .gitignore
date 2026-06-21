@@ -1,6 +1,7 @@
 ﻿node_modules/
 dist/
 .codex-logs/
+*.log
 .env
 .env.*
 !.env.example

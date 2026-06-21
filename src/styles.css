@@ -1630,6 +1630,17 @@ input:focus-visible {
   display: none;
 }
 
+.admin-secondary-action {
+  min-height: 42px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  color: var(--green);
+  background: var(--green-soft);
+  font-weight: 850;
+  cursor: pointer;
+}
+
 .admin-upload strong,
 .admin-upload span {
   display: block;
