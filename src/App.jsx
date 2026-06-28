@@ -26,7 +26,6 @@ import {
   Search,
   Send,
   ShieldCheck,
-  Sparkles,
   Timer,
   Trash2,
   UserRound,
@@ -1526,7 +1525,7 @@ function StudentHome({
         <FeatureTile
           icon={NotebookPen}
           title="일정과 할일"
-          detail="StudyCat 리포트 반영"
+          detail="오늘 계획 관리"
           onClick={() => onNavigate('plan')}
         />
       </section>
@@ -1592,7 +1591,7 @@ function ParentHome({
         <FeatureTile
           icon={MessageSquareText}
           title="주간 멘토링"
-          detail="medical_suite 포털 연동"
+          detail="주간 피드백 확인"
           onClick={() => onNavigate('mentoring')}
         />
       </section>
@@ -1663,7 +1662,7 @@ function LearningPage({ timeFilter, setTimeFilter, audience }) {
       <SectionHeader
         icon={BarChart3}
         title={audience === 'parent' ? '학습 현황' : '내 학습 분석'}
-        subtitle="StudyCat 공부 시간과 과목별 통계가 같은 구조로 실시간 반영됩니다."
+        subtitle="기간별 학습 흐름과 과목별 집중도를 확인합니다."
       />
       <HeroPanel
         label="선택 기간 누적"
@@ -1678,7 +1677,6 @@ function LearningPage({ timeFilter, setTimeFilter, audience }) {
       <StatStrip />
       <SubjectTimeCard expanded />
       <WeeklyCard expanded />
-      <IntegrationCard />
     </div>
   );
 }
@@ -1795,15 +1793,6 @@ function PlanPage({ schedules, setSchedules, todos, setTodos, role }) {
 
   return (
     <div className="screen-stack">
-      <SectionHeader
-        icon={CalendarCheck}
-        title="오늘의 일정과 할일"
-        subtitle={
-          readonly
-            ? '학부모는 학생의 오늘 계획과 완료 상태를 확인합니다.'
-            : '학생은 일정을 등록하고 할일을 체크할 수 있습니다. StudyCat 리포트와 같은 화면에서 확인합니다.'
-        }
-      />
       <PlanPreview
         schedules={schedules}
         setSchedules={setSchedules}
@@ -1812,7 +1801,6 @@ function PlanPage({ schedules, setSchedules, todos, setTodos, role }) {
         readonly={readonly}
         expanded
       />
-      <IntegrationCard />
     </div>
   );
 }
@@ -1823,10 +1811,9 @@ function MealPage() {
       <SectionHeader
         icon={Salad}
         title="오늘의 식단"
-        subtitle="첨부된 다다익찬 2026년 6월 도시락 메뉴와 관리자 업로드 엑셀을 자동 반영합니다."
+        subtitle="점심과 저녁 메뉴를 확인합니다."
       />
       <MealCard expanded />
-      <IntegrationCard />
     </div>
   );
 }
@@ -1838,7 +1825,7 @@ function AttendancePage() {
       <SectionHeader
         icon={DoorOpen}
         title="입퇴실 현황"
-        subtitle="StudyCat 출결과 관리자 입퇴실 파일 업로드 데이터를 자동 반영합니다."
+        subtitle="현재 입실 상태와 이동 기록을 확인합니다."
       />
       <section className="attendance-hero">
         <div>
@@ -1880,7 +1867,7 @@ function MentoringPage() {
       <SectionHeader
         icon={MessageSquareText}
         title="주간 멘토링 기록"
-        subtitle={mentoringStatus}
+        subtitle={mentoringRecords.length ? '주간 피드백과 다음 학습 액션을 확인합니다.' : mentoringStatus}
       />
       {mentoringRecords.map((record) => (
         <section className="mentoring-card" key={record.week}>
@@ -1903,7 +1890,7 @@ function MentoringPage() {
             <strong>{task.done ? '완료' : '진행 중'}</strong>
           </div>
           <h3>{task.title}</h3>
-          <p>medical_suite 토큰이 설정되면 주간 멘토링 기록과 다음 주 액션으로 자동 대체됩니다.</p>
+          <p>멘토링 기록이 없는 경우 오늘 과제 진행 상태를 먼저 보여줍니다.</p>
         </section>
       ))}
       {!mentoringRecords.length && !fallbackTasks.length ? (
@@ -1911,7 +1898,6 @@ function MentoringPage() {
           <div className="analysis-note">medical_suite 포털 토큰이 없거나 해당 학생의 멘토링 기록이 아직 없습니다.</div>
         </section>
       ) : null}
-      <IntegrationCard />
     </div>
   );
 }
@@ -1967,7 +1953,7 @@ function SubjectTimeCard({ expanded = false }) {
       )}
       {expanded && total > 0 && (
         <div className="analysis-note">
-          StudyCat에서 받은 과목별 공부 시간 기준으로 표시합니다.
+          기간별 누적 공부 시간을 과목별로 비교합니다.
         </div>
       )}
     </section>
@@ -2001,11 +1987,6 @@ function MealCard({ expanded = false }) {
       ) : (
         <div className="admin-empty">표시할 도시락 메뉴가 없습니다.</div>
       )}
-      {expanded && (
-        <div className="analysis-note">
-          {todayMeal ? mealStatus : `오늘 등록된 도시락은 없습니다. ${meal ? `${formatMealDate(meal.date)} 메뉴를 미리 보여줍니다.` : mealStatus}`}
-        </div>
-      )}
     </section>
   );
 }
@@ -2030,6 +2011,8 @@ function PlanPreview({
   readonly = false,
   expanded = false,
 }) {
+  const completedTodos = todos.filter((todo) => todo.done).length;
+
   function editSchedule(target) {
     const next = window.prompt('일정 내용을 수정하세요.', target.title);
     if (!next?.trim()) return;
@@ -2047,119 +2030,141 @@ function PlanPreview({
   }
 
   return (
-    <section className="data-card">
-      <div className="card-header">
-        <div>
-          <p>오늘의 일정과 할일</p>
-          <h3>{readonly ? '학부모 확인 모드' : '등록 및 편집'}</h3>
+    <div className={expanded ? 'plan-sections expanded' : 'plan-sections'}>
+      <section className="data-card plan-card schedule-plan-card">
+        <div className="card-header plan-card-header">
+          <div>
+            <p>{readonly ? '오늘 진행 현황' : 'StudyCat'}</p>
+            <h3>오늘 시간표</h3>
+          </div>
+          <span className="plan-count-badge">{schedules.length}개</span>
         </div>
-        <CalendarCheck size={22} />
-      </div>
-
-      <div className="schedule-list">
-        {schedules.map((item) => (
-          <article className="schedule-item" key={item.id}>
-            <time>{item.time}</time>
-            <div>
-              <strong>{item.title}</strong>
-              <span>{item.tag}</span>
-            </div>
-            {!readonly && (
-              <div className="row-actions">
-                <button type="button" aria-label="일정 수정" onClick={() => editSchedule(item)}>
-                  <Edit3 size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label="일정 삭제"
-                  onClick={() => setSchedules((current) => current.filter((next) => next.id !== item.id))}
-                >
-                  <Trash2 size={15} />
-                </button>
+        <div className="plan-timeline">
+          {schedules.map((item) => (
+            <article className="plan-schedule-item" key={item.id}>
+              <time>{item.time}</time>
+              <div className="plan-schedule-body">
+                <strong>{item.title}</strong>
+                <span>{item.tag}</span>
               </div>
-            )}
-          </article>
-        ))}
-      </div>
+              {!readonly && (
+                <div className="row-actions">
+                  <button type="button" aria-label="일정 수정" onClick={() => editSchedule(item)}>
+                    <Edit3 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="일정 삭제"
+                    onClick={() =>
+                      setSchedules((current) => current.filter((next) => next.id !== item.id))
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
 
-      {!readonly && expanded && (
-        <InlineComposer
-          placeholder="예: 21:00 탐구 오답 정리"
-          buttonLabel="일정 추가"
-          onAdd={(value) => {
-            const [timeCandidate, ...rest] = value.trim().split(' ');
-            const hasTime = /^\d{1,2}:\d{2}$/.test(timeCandidate);
-            setSchedules((current) => [
-              ...current,
-              {
-                id: createId('schedule'),
-                time: hasTime ? timeCandidate : '오늘',
-                title: hasTime ? rest.join(' ') || '새 일정' : value,
-                tag: '앱에서 추가',
-              },
-            ]);
-          }}
-        />
-      )}
+        {!readonly && expanded && (
+          <InlineComposer
+            variant="plan-composer"
+            placeholder="예: 21:00 탐구 오답 정리"
+            buttonLabel="일정 추가"
+            onAdd={(value) => {
+              const [timeCandidate, ...rest] = value.trim().split(' ');
+              const hasTime = /^\d{1,2}:\d{2}$/.test(timeCandidate);
+              setSchedules((current) => [
+                ...current,
+                {
+                  id: createId('schedule'),
+                  time: hasTime ? timeCandidate : '오늘',
+                  title: hasTime ? rest.join(' ') || '새 일정' : value,
+                  tag: '앱에서 추가',
+                },
+              ]);
+            }}
+          />
+        )}
+      </section>
 
-      <div className="todo-list">
-        {todos.map((todo) => (
-          <article className={todo.done ? 'todo done' : 'todo'} key={todo.id}>
-            <button
-              type="button"
-              className="todo-main"
-              disabled={readonly}
-              onClick={() =>
-                setTodos((current) =>
-                  current.map((item) =>
-                    item.id === todo.id ? { ...item, done: !item.done } : item,
-                  ),
-                )
-              }
-            >
-              <span>{todo.done && <Check size={13} />}</span>
-              <strong>{todo.title}</strong>
-            </button>
-            {!readonly && (
-              <div className="row-actions">
-                <button type="button" aria-label="할일 수정" onClick={() => editTodo(todo)}>
-                  <Edit3 size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label="할일 삭제"
-                  onClick={() => setTodos((current) => current.filter((item) => item.id !== todo.id))}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
+      <section className="data-card plan-card todo-plan-card">
+        <div className="card-header plan-card-header">
+          <div>
+            <p>{completedTodos}/{todos.length} 완료</p>
+            <h3>할일 체크리스트</h3>
+          </div>
+          <span className="plan-count-badge">
+            {Math.round((completedTodos / Math.max(1, todos.length)) * 100)}%
+          </span>
+        </div>
+        <div className="plan-progress-track">
+          <span style={{ width: `${Math.round((completedTodos / Math.max(1, todos.length)) * 100)}%` }} />
+        </div>
+        <div className="plan-todo-list">
+          {todos.map((todo) => (
+            <article className={todo.done ? 'plan-todo-item done' : 'plan-todo-item'} key={todo.id}>
+              <button
+                type="button"
+                className="todo-main"
+                disabled={readonly}
+                onClick={() =>
+                  setTodos((current) =>
+                    current.map((item) =>
+                      item.id === todo.id ? { ...item, done: !item.done } : item,
+                    ),
+                  )
+                }
+              >
+                <span>{todo.done && <Check size={13} />}</span>
+                <strong>{todo.title}</strong>
+              </button>
+              {!readonly && (
+                <div className="row-actions">
+                  <button type="button" aria-label="할일 수정" onClick={() => editTodo(todo)}>
+                    <Edit3 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="할일 삭제"
+                    onClick={() => setTodos((current) => current.filter((item) => item.id !== todo.id))}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
 
-      {!readonly && (
-        <InlineComposer
-          placeholder="새 할일 입력"
-          buttonLabel="할일 추가"
-          compact={!expanded}
-          onAdd={(value) =>
-            setTodos((current) => [
-              ...current,
-              { id: createId('todo'), title: value, done: false },
-            ])
-          }
-        />
-      )}
-    </section>
+        {!readonly && (
+          <InlineComposer
+            variant="plan-composer"
+            placeholder="새 할일 입력"
+            buttonLabel="할일 추가"
+            compact={!expanded}
+            onAdd={(value) =>
+              setTodos((current) => [
+                ...current,
+                { id: createId('todo'), title: value, done: false },
+              ])
+            }
+          />
+        )}
+      </section>
+    </div>
   );
 }
 
-function InlineComposer({ placeholder, buttonLabel, onAdd, compact = false }) {
+function InlineComposer({ placeholder, buttonLabel, onAdd, compact = false, variant = '' }) {
   const [value, setValue] = useState('');
+  const className = ['inline-composer', compact ? 'compact' : '', variant]
+    .filter(Boolean)
+    .join(' ');
   return (
     <form
-      className={compact ? 'inline-composer compact' : 'inline-composer'}
+      className={className}
       onSubmit={(event) => {
         event.preventDefault();
         if (!value.trim()) return;
@@ -2246,29 +2251,6 @@ function PointsCard({ expanded = false }) {
           medipenalty 운영 사이트 누적값과 StudyCat 보상 데이터를 표시합니다.
         </div>
       )}
-    </section>
-  );
-}
-
-function IntegrationCard() {
-  const { linkedSystems, syncStatus } = useSyncData();
-  return (
-    <section className="integration-card">
-      <div className="card-header">
-        <div>
-          <p>실시간 연동 상태</p>
-          <h3>학생·학부모 데이터 소스</h3>
-        </div>
-        <Sparkles size={22} />
-        <span>{syncStatus}</span>
-      </div>
-      {linkedSystems.map((system) => (
-        <div className="integration-row" key={system.name}>
-          <strong>{system.name}</strong>
-          <span>{system.scope}</span>
-          <small>{system.status}</small>
-        </div>
-      ))}
     </section>
   );
 }

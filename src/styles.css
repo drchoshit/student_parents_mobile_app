@@ -797,6 +797,166 @@ input:focus-visible {
   padding: 0;
 }
 
+.plan-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-card {
+  padding: 16px;
+  border: 1px solid rgba(30, 41, 59, 0.1);
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.055);
+}
+
+.plan-card-header {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.plan-count-badge {
+  display: inline-flex;
+  min-width: 40px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: #f2f5f8;
+  font-size: 0.8rem;
+  font-weight: 820;
+}
+
+.plan-timeline {
+  display: grid;
+}
+
+.schedule-plan-card .plan-timeline {
+  margin-top: 2px;
+}
+
+.plan-schedule-item {
+  display: grid;
+  grid-template-columns: 62px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.08);
+}
+
+.plan-schedule-item:last-child {
+  border-bottom: 0;
+}
+
+.plan-schedule-item time {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--ink);
+  background: #f2f5f8;
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.plan-schedule-body {
+  min-width: 0;
+}
+
+.plan-schedule-body strong,
+.plan-schedule-body span {
+  display: block;
+}
+
+.plan-schedule-body strong {
+  color: var(--ink);
+  line-height: 1.32;
+  word-break: keep-all;
+}
+
+.plan-schedule-body span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 640;
+}
+
+.plan-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f6;
+  margin-bottom: 12px;
+}
+
+.plan-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+}
+
+.plan-todo-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.plan-todo-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.plan-todo-item.done {
+  border-color: var(--line);
+  background: #f8fafc;
+}
+
+.plan-todo-item.done strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.plan-todo-item.done .todo-main span {
+  border-color: var(--teal);
+  background: var(--teal);
+}
+
+.plan-card .todo-main span {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.plan-card .row-actions button {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.plan-composer {
+  margin-top: 12px;
+}
+
+.plan-composer input {
+  min-height: 48px;
+  background: #fff;
+}
+
+.plan-composer button {
+  min-height: 48px;
+  border-radius: 12px;
+}
+
 .week-chart {
   height: 128px;
   display: grid;

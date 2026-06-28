@@ -1,17 +1,61 @@
-const studycatApiBase = import.meta.env.VITE_STUDYCAT_API_BASE || 'https://medical-studycat.onrender.com/app-api';
-const studycatFallbackApiBase = import.meta.env.VITE_STUDYCAT_FALLBACK_API_BASE || 'https://medical-studycat.onrender.com/app-api';
-const parentToken = import.meta.env.VITE_STUDYCAT_PARENT_TOKEN || '';
-const configuredAdminToken = import.meta.env.VITE_STUDYCAT_ADMIN_TOKEN || '';
-const configuredMentoringToken = import.meta.env.VITE_MENTORING_TOKEN || '';
-const mentoringApiBase = import.meta.env.VITE_MENTORING_API_BASE || 'https://mentoring-api-6l1a.onrender.com';
-const medipenaltyApiBase = import.meta.env.VITE_MEDIPENALTY_API_BASE || 'https://medipenalty.kr/api';
+const defaultStudycatApiBase = 'https://medical-studycat.onrender.com/app-api';
+const defaultMentoringApiBase = 'https://mentoring-api-6l1a.onrender.com';
+const defaultMedipenaltyApiBase = 'https://medipenalty.kr/api';
+
+function localSetting(...keys) {
+  if (typeof localStorage === 'undefined') return '';
+  for (const key of keys) {
+    const value = localStorage.getItem(key);
+    if (value?.trim()) return value.trim();
+  }
+  return '';
+}
+
+function studycatApiBase() {
+  return import.meta.env.VITE_STUDYCAT_API_BASE
+    || localSetting('medical-roadmap-studycat-api-base', 'medical-studycat-api-base')
+    || defaultStudycatApiBase;
+}
+
+function studycatFallbackApiBase() {
+  return import.meta.env.VITE_STUDYCAT_FALLBACK_API_BASE
+    || localSetting('medical-roadmap-studycat-fallback-api-base')
+    || studycatApiBase();
+}
+
+function parentToken() {
+  return import.meta.env.VITE_STUDYCAT_PARENT_TOKEN
+    || localSetting('medical-roadmap-studycat-parent-token', 'medical-studycat-parent-token');
+}
+
+function configuredAdminToken() {
+  return import.meta.env.VITE_STUDYCAT_ADMIN_TOKEN
+    || localSetting('medical-roadmap-studycat-admin-token', 'medical-study-app-admin-token', 'adminToken');
+}
+
+function configuredMentoringToken() {
+  return import.meta.env.VITE_MENTORING_TOKEN
+    || localSetting('medical-roadmap-mentoring-token', 'medical-study-mentor-token', 'mentorToken', 'mentoring-token');
+}
+
+function mentoringApiBase() {
+  return import.meta.env.VITE_MENTORING_API_BASE
+    || localSetting('medical-roadmap-mentoring-api-base')
+    || defaultMentoringApiBase;
+}
+
+function medipenaltyApiBase() {
+  return import.meta.env.VITE_MEDIPENALTY_API_BASE
+    || localSetting('medical-roadmap-medipenalty-api-base')
+    || defaultMedipenaltyApiBase;
+}
 
 function studycatUrl(path, params = {}) {
-  return studycatUrlForBase(studycatApiBase, path, params);
+  return studycatUrlForBase(studycatApiBase(), path, params);
 }
 
 function studycatFallbackUrl(path, params = {}) {
-  return studycatUrlForBase(studycatFallbackApiBase, path, params);
+  return studycatUrlForBase(studycatFallbackApiBase(), path, params);
 }
 
 function studycatUrlForBase(apiBase, path, params = {}) {
@@ -35,25 +79,17 @@ function externalUrl(base, path, params = {}) {
 }
 
 function authHeaders() {
-  return parentToken ? { Authorization: `Bearer ${parentToken}` } : {};
-}
-
-function localToken(...keys) {
-  if (typeof localStorage === 'undefined') return '';
-  for (const key of keys) {
-    const value = localStorage.getItem(key);
-    if (value?.trim()) return value.trim();
-  }
-  return '';
+  const token = parentToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function mentoringHeaders() {
-  const token = configuredMentoringToken || localToken('medical-study-mentor-token', 'mentorToken', 'mentoring-token');
+  const token = configuredMentoringToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function adminHeaders(adminToken = '') {
-  const token = configuredAdminToken || adminToken;
+  const token = configuredAdminToken() || adminToken;
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -232,7 +268,7 @@ export async function sendStudycatAdminMessage({ recipientId, recipientName, bod
 
 export function subscribeStudycatFamilySnapshot(studentId, onSnapshot, onError) {
   if (typeof EventSource === 'undefined') return () => {};
-  const source = new EventSource(studycatUrl('/family/events', { studentId, parentToken }));
+  const source = new EventSource(studycatUrl('/family/events', { studentId, parentToken: parentToken() }));
   source.onmessage = (event) => {
     try {
       onSnapshot(JSON.parse(event.data));
@@ -246,8 +282,33 @@ export function subscribeStudycatFamilySnapshot(studentId, onSnapshot, onError) 
   return () => source.close();
 }
 
+async function resolveMentoringHeaders() {
+  const existingHeaders = mentoringHeaders();
+  if (existingHeaders.Authorization) return existingHeaders;
+
+  const username = localSetting('medical-roadmap-mentoring-username') || 'admin';
+  const password = localSetting('medical-roadmap-mentoring-password') || 'admin1234';
+  if (!username || !password) return {};
+
+  const body = JSON.stringify({ username, password });
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  };
+  const loginUrl = studycatUrl('/../mentoring-api/api/auth/login', { _t: Date.now() });
+  const directLoginUrl = externalUrl(mentoringApiBase(), '/api/auth/login', { _t: Date.now() });
+  const payload = await fetchJson(loginUrl, options).catch(() => fetchJson(directLoginUrl, options));
+  const token = payload?.token || '';
+  if (token && typeof localStorage !== 'undefined') {
+    localStorage.setItem('medical-roadmap-mentoring-token', token);
+    localStorage.setItem('medical-study-mentor-token', token);
+  }
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function loadMedipenaltySummary() {
-  const directUrl = externalUrl(medipenaltyApiBase, '/summary/cumulative', { _t: Date.now() });
+  const directUrl = externalUrl(medipenaltyApiBase(), '/summary/cumulative', { _t: Date.now() });
   const proxyUrl = studycatUrl('/../penalty-api/summary/cumulative', { _t: Date.now() });
   const payload = await fetchJson(proxyUrl).catch(() => fetchJson(directUrl));
   return {
@@ -258,7 +319,7 @@ export async function loadMedipenaltySummary() {
 }
 
 export async function loadMentoringPortal(studentId) {
-  const headers = mentoringHeaders();
+  const headers = await resolveMentoringHeaders();
   if (!headers.Authorization) {
     return {
       records: [],
@@ -269,7 +330,7 @@ export async function loadMentoringPortal(studentId) {
   }
 
   const weeksUrl = studycatUrl('/../mentoring-api/api/weeks', { _t: Date.now() });
-  const directWeeksUrl = externalUrl(mentoringApiBase, '/api/weeks', { _t: Date.now() });
+  const directWeeksUrl = externalUrl(mentoringApiBase(), '/api/weeks', { _t: Date.now() });
   const weeksPayload = await fetchJson(weeksUrl, { headers }).catch(() => fetchJson(directWeeksUrl, { headers }));
   const weeks = extractRows(weeksPayload).sort((a, b) => Number(a.id ?? a.weekId ?? 0) - Number(b.id ?? b.weekId ?? 0));
   const latestWeek = weeks.at(-1);
@@ -284,7 +345,7 @@ export async function loadMentoringPortal(studentId) {
 
   const params = { studentId, weekId, _t: Date.now() };
   const recordUrl = studycatUrl('/../mentoring-api/api/mentoring/record', params);
-  const directRecordUrl = externalUrl(mentoringApiBase, '/api/mentoring/record', params);
+  const directRecordUrl = externalUrl(mentoringApiBase(), '/api/mentoring/record', params);
   const recordPayload = await fetchJson(recordUrl, { headers }).catch(() => fetchJson(directRecordUrl, { headers }));
   const normalized = normalizeMentoringResult(recordPayload, studentId, weekId);
   return {
