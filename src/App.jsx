@@ -475,11 +475,11 @@ function buildSyncData(snapshot, linkedStudentId, connectionState, operatingData
     ? report.subjectStudy.map((item, index) => ({
         subject: item.subject ?? `과목 ${index + 1}`,
         minutes: safeMinutes(item.minutes),
-        color: item.color ?? subjectStudy[index % subjectStudy.length]?.color ?? '#12372f',
+        color: item.color ?? subjectStudy[index % subjectStudy.length]?.color ?? 'var(--blue)',
         note: item.note ?? 'Studycat 실시간',
       }))
     : student?.subject
-      ? [{ subject: student.subject, minutes: safeMinutes(student.todayMinutes), color: '#1f5a4a', note: 'StudyCat 학생 상태' }]
+      ? [{ subject: student.subject, minutes: safeMinutes(student.todayMinutes), color: 'var(--teal)', note: 'StudyCat 학생 상태' }]
       : [];
 
   const nextWeeklyLearning = Array.isArray(report?.weeklyLearning) && report.weeklyLearning.length
@@ -2304,7 +2304,7 @@ function RangePicker() {
 function ProgressRing({ value, label }) {
   const style = useMemo(
     () => ({
-      background: `conic-gradient(var(--gold-2) ${value * 3.6}deg, rgba(255,255,255,.18) 0deg)`,
+      background: `conic-gradient(var(--blue) ${value * 3.6}deg, rgba(255,255,255,.18) 0deg)`,
     }),
     [value],
   );
