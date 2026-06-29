@@ -709,8 +709,12 @@ function App() {
   }, [linkedStudentId, sessionRole]);
 
   useEffect(() => {
-    setSchedules(syncData.schedules);
-    setTodos(syncData.todos);
+    setSchedules((current) => (
+      syncData.schedules.length ? syncData.schedules : current.length ? current : initialSchedules
+    ));
+    setTodos((current) => (
+      syncData.todos.length ? syncData.todos : current.length ? current : initialTodos
+    ));
   }, [syncData.schedules, syncData.todos]);
 
   const navItems = sessionRole === 'admin' ? [] : sessionRole === 'parent' ? parentNav : studentNav;

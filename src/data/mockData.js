@@ -46,10 +46,10 @@ export const studySummary = {
 };
 
 export const subjectStudy = [
-  { subject: '국어', minutes: 126, color: '#12372f', note: '독서 실전 3지문' },
-  { subject: '수학', minutes: 154, color: '#1f5a4a', note: '미적분 오답 집중' },
-  { subject: '영어', minutes: 63, color: '#b08a45', note: '순서/삽입 유형' },
-  { subject: '탐구', minutes: 94, color: '#7c6f42', note: '개념 회독 및 자료 분석' },
+  { subject: '국어', minutes: 126, color: '#3b5bdb', note: '독서 실전 3지문' },
+  { subject: '수학', minutes: 154, color: '#0891b2', note: '미적분 오답 집중' },
+  { subject: '영어', minutes: 63, color: '#f05252', note: '순서/삽입 유형' },
+  { subject: '탐구', minutes: 94, color: '#f59f00', note: '개념 회독 및 자료 분석' },
 ];
 
 export const weeklyLearning = [
