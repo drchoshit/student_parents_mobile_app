@@ -2489,3 +2489,1045 @@ body {
     box-shadow: 0 22px 60px rgba(21, 23, 29, 0.14);
   }
 }
+
+/* Vivid executive mobile theme */
+:root {
+  color: #171821;
+  background: #dfe6ee;
+  --ink: #171821;
+  --muted: #596274;
+  --subtle: #8f99aa;
+  --line: rgba(25, 28, 38, 0.12);
+  --panel: #ffffff;
+  --surface: #edf2f6;
+  --blue: #3158d4;
+  --teal: #0b9f9a;
+  --amber: #f0a72f;
+  --rose: #ef5f5c;
+  --violet: #7a55d9;
+  --mint: #d9f5ef;
+  --sky-soft: #dcecff;
+  --violet-soft: #ece5ff;
+  --rose-soft: #ffe5e5;
+  --amber-soft: #fff1d2;
+  --radius: 8px;
+  --card-shadow: 0 14px 32px rgba(24, 31, 45, 0.12);
+  --soft-shadow: 0 9px 22px rgba(24, 31, 45, 0.09);
+}
+
+body {
+  background:
+    linear-gradient(180deg, #cfd9e5 0%, #edf2f6 34%, #dbe4ec 100%);
+}
+
+.login-screen {
+  background:
+    linear-gradient(150deg, rgba(49, 88, 212, 0.18), rgba(239, 95, 92, 0.12) 46%, rgba(11, 159, 154, 0.13)),
+    #dfe6ee;
+}
+
+.login-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fa 100%);
+  border-color: rgba(23, 24, 33, 0.1);
+  box-shadow: 0 22px 48px rgba(23, 24, 33, 0.16);
+}
+
+.brand-mark {
+  background:
+    linear-gradient(135deg, rgba(49, 88, 212, 0.98), rgba(239, 95, 92, 0.92)),
+    var(--blue);
+}
+
+.role-switch button.active,
+.primary-action,
+.inline-composer button,
+.admin-overview button {
+  color: #fff;
+  background: linear-gradient(135deg, #171821, #2e3546);
+  box-shadow: 0 12px 22px rgba(23, 24, 33, 0.22);
+}
+
+.app-root {
+  background:
+    linear-gradient(180deg, #d7e0ea 0%, #edf3f7 44%, #dfe7ee 100%);
+}
+
+.app-header {
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(23, 24, 33, 0.98), rgba(44, 47, 61, 0.97)),
+    #171821;
+  box-shadow: 0 12px 28px rgba(23, 24, 33, 0.2);
+}
+
+.app-header::after {
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--teal), var(--blue), var(--rose), var(--amber));
+  opacity: 1;
+}
+
+.app-header h1 {
+  color: #fff;
+}
+
+.app-header p,
+.app-header span {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.app-header p,
+.eyebrow {
+  color: #7ddfd6;
+}
+
+.icon-button {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.icon-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.content {
+  padding: 14px 12px 18px;
+}
+
+.screen-stack {
+  gap: 13px;
+}
+
+.hero-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(36, 43, 66, 0.94) 0%, rgba(49, 88, 212, 0.9) 44%, rgba(239, 95, 92, 0.88) 100%);
+  box-shadow: 0 18px 38px rgba(49, 88, 212, 0.2);
+}
+
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 7px;
+  background: linear-gradient(90deg, #6ee7d8, #8ea2ff, #ff8f8b, #ffd166);
+}
+
+.hero-panel > * {
+  position: relative;
+}
+
+.hero-heading {
+  align-items: flex-start;
+}
+
+.hero-heading p {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.76rem;
+}
+
+.hero-heading h2 {
+  margin-top: 8px;
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 0.96;
+}
+
+.hero-caption {
+  margin-top: 10px;
+  max-width: 18rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.hero-caption-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hero-caption-parts span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  margin: 0;
+  max-width: none;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.76rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.progress-ring {
+  width: 78px;
+  height: 78px;
+  background: conic-gradient(#ffe082 0deg, rgba(255, 255, 255, 0.22) 0deg);
+}
+
+.progress-ring div {
+  width: 60px;
+  height: 60px;
+}
+
+.hero-panel .progress-ring div {
+  color: #fff;
+  background: rgba(23, 24, 33, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.hero-panel .segmented {
+  margin-top: 15px;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(23, 24, 33, 0.22);
+}
+
+.hero-panel .segmented button {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.hero-panel .segmented button.active {
+  color: #171821;
+  background: #fff;
+}
+
+.feature-grid {
+  gap: 11px;
+}
+
+.feature-tile {
+  min-height: 122px;
+  padding: 14px;
+  border: 1px solid transparent;
+  box-shadow: var(--soft-shadow);
+}
+
+.feature-tile:nth-child(1) {
+  background: linear-gradient(180deg, #dff5ff 0%, #f5fbff 100%);
+  border-color: rgba(2, 132, 199, 0.22);
+}
+
+.feature-tile:nth-child(2) {
+  background: linear-gradient(180deg, #ede7ff 0%, #fbf9ff 100%);
+  border-color: rgba(122, 85, 217, 0.22);
+}
+
+.feature-tile:nth-child(3) {
+  background: linear-gradient(180deg, #ffe7e4 0%, #fff8f5 100%);
+  border-color: rgba(239, 95, 92, 0.22);
+}
+
+.feature-tile:nth-child(4) {
+  background: linear-gradient(180deg, #fff0c9 0%, #fffaf0 100%);
+  border-color: rgba(240, 167, 47, 0.24);
+}
+
+.tile-icon {
+  border-radius: 12px;
+}
+
+.feature-tile:nth-child(1) .tile-icon {
+  color: #0369a1;
+  background: #bdefff;
+}
+
+.feature-tile:nth-child(2) .tile-icon {
+  color: var(--violet);
+  background: #dfd4ff;
+}
+
+.feature-tile:nth-child(3) .tile-icon {
+  color: #dc2626;
+  background: #ffd4d2;
+}
+
+.feature-tile:nth-child(4) .tile-icon {
+  color: #b45309;
+  background: #ffe2a3;
+}
+
+.data-card,
+.integration-card,
+.exam-focus,
+.attendance-hero,
+.timeline-card,
+.mentoring-card,
+.section-header,
+.parent-status-card,
+.stat-strip {
+  border-color: rgba(23, 24, 33, 0.1);
+  box-shadow: var(--soft-shadow);
+}
+
+.data-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7fb 100%);
+}
+
+.data-card:nth-of-type(odd) {
+  background: linear-gradient(180deg, #f7fbff 0%, #eaf3ff 100%);
+}
+
+.card-header p,
+.hero-heading p,
+.section-header p {
+  letter-spacing: 0;
+}
+
+.card-header svg {
+  color: var(--blue);
+}
+
+.stat-strip {
+  overflow: hidden;
+  background: #fff;
+}
+
+.stat-strip div:nth-child(1) {
+  background: #e8f7ff;
+}
+
+.stat-strip div:nth-child(2) {
+  background: #f0ebff;
+}
+
+.stat-strip div:nth-child(3) {
+  background: #fff1db;
+}
+
+.subject-row {
+  padding: 9px 10px;
+  border: 1px solid rgba(23, 24, 33, 0.08);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.bar-track,
+.week-bar,
+.plan-progress-track {
+  background: rgba(24, 31, 45, 0.1);
+}
+
+.meal-item {
+  background: #fff5e6;
+}
+
+.meal-item:nth-child(2) {
+  background: #ffeceb;
+}
+
+.schedule-item {
+  background: #eef8ff;
+  border-color: rgba(2, 132, 199, 0.16);
+}
+
+.todo {
+  background: #fff;
+}
+
+.todo.done {
+  background: #edf7ff;
+  border-color: rgba(49, 88, 212, 0.2);
+}
+
+.todo.done .todo-main span,
+.plan-todo-item.done .todo-main span {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.section-header {
+  background: linear-gradient(135deg, #e6f7ff 0%, #f8fbff 100%);
+}
+
+.section-header > span,
+.attendance-times {
+  color: #0369a1;
+  background: #c8efff;
+}
+
+.exam-focus {
+  background:
+    linear-gradient(180deg, #f7f2ff 0%, #ffffff 100%);
+}
+
+.timer-face {
+  background: conic-gradient(var(--violet) var(--timer-progress), rgba(24, 31, 45, 0.12) 0deg);
+}
+
+.exam-list button {
+  background: #fff;
+}
+
+.exam-list button.active {
+  border-color: rgba(122, 85, 217, 0.32);
+  background: #f1ebff;
+}
+
+.attendance-hero {
+  background: linear-gradient(135deg, #e7fff9 0%, #ffffff 100%);
+}
+
+.next-step,
+.analysis-note {
+  color: #273247;
+  border-color: rgba(49, 88, 212, 0.18);
+  background: linear-gradient(135deg, #edf3ff, #fff2ef);
+}
+
+.plan-sections {
+  gap: 14px;
+}
+
+.plan-card {
+  padding: 16px;
+  border: 1px solid rgba(23, 24, 33, 0.1);
+  box-shadow: var(--card-shadow);
+}
+
+.data-card.schedule-plan-card {
+  background:
+    linear-gradient(180deg, #e7f6ff 0%, #f7fbff 100%);
+}
+
+.data-card.todo-plan-card {
+  background:
+    linear-gradient(180deg, #f3ecff 0%, #fff8fb 100%);
+}
+
+.schedule-plan-card .plan-count-badge {
+  color: #075985;
+  background: #ccefff;
+}
+
+.todo-plan-card .plan-count-badge {
+  color: #5b21b6;
+  background: #e3d8ff;
+}
+
+.plan-schedule-item {
+  border-color: rgba(2, 132, 199, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.plan-schedule-item time {
+  color: #075985;
+  background: #d9f1ff;
+}
+
+.plan-todo-item {
+  border-color: rgba(122, 85, 217, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.plan-todo-item.done {
+  border-color: rgba(49, 88, 212, 0.26);
+  background: #eaf0ff;
+}
+
+.plan-progress-track span {
+  background: linear-gradient(90deg, var(--teal), var(--blue), var(--rose), var(--amber));
+}
+
+.row-actions button,
+.plan-card .row-actions button,
+.timer-actions button {
+  color: #344054;
+  background: rgba(255, 255, 255, 0.76);
+  border-color: rgba(23, 24, 33, 0.1);
+}
+
+.inline-composer input,
+.plan-composer input,
+.range-picker input,
+.input-label input {
+  border-color: rgba(23, 24, 33, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.inline-composer button {
+  color: #fff;
+  background: linear-gradient(135deg, #171821, #2f374b);
+}
+
+.bottom-nav {
+  border-top: 0;
+  background: rgba(23, 24, 33, 0.96);
+  box-shadow: 0 -16px 30px rgba(23, 24, 33, 0.18);
+}
+
+.bottom-nav button {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.bottom-nav button.active {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(49, 88, 212, 0.86), rgba(11, 159, 154, 0.82));
+}
+
+.bottom-nav button.active svg {
+  color: #fff;
+}
+
+.admin-section-grid button.active,
+.admin-form-grid button {
+  background: linear-gradient(135deg, var(--blue), var(--teal));
+}
+
+.admin-panel,
+.admin-overview,
+.admin-kpi,
+.admin-row-card,
+.admin-list-card {
+  background: linear-gradient(180deg, #fff, #f4f7fa);
+}
+
+.admin-secondary-action {
+  color: #075985;
+  background: #dff4ff;
+}
+
+@media (max-width: 370px) {
+  .hero-heading h2 {
+    font-size: 1.95rem;
+  }
+
+  .hero-caption {
+    font-size: 0.76rem;
+  }
+
+  .hero-caption-parts span {
+    min-height: 22px;
+    padding: 0 7px;
+  }
+}
+
+/* Reference matched restrained theme */
+:root {
+  color: #111827;
+  background: #dfe6eb;
+  --ink: #111827;
+  --muted: #667085;
+  --subtle: #97a3b3;
+  --line: #d9e1e8;
+  --panel: #ffffff;
+  --surface: #f4f7f9;
+  --blue: #4f6df5;
+  --teal: #11b8aa;
+  --amber: #80ad28;
+  --rose: #ed665a;
+  --violet: #4f6df5;
+  --sky-soft: #e8f7ff;
+  --violet-soft: #eef1ff;
+  --rose-soft: #fff0ed;
+  --amber-soft: #f4f8df;
+  --radius: 8px;
+  --card-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --soft-shadow: 0 6px 18px rgba(15, 23, 42, 0.065);
+}
+
+body {
+  background: #dfe6eb;
+}
+
+.login-screen {
+  background: #dfe6eb;
+}
+
+.app-root {
+  background: #dfe6eb;
+}
+
+.app-header {
+  color: #fff;
+  background:
+    linear-gradient(135deg, #142434 0%, #172b39 50%, #0b7c72 100%),
+    #142434;
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+.app-header::after {
+  display: none;
+}
+
+.app-header h1 {
+  color: #fff;
+}
+
+.app-header p {
+  color: #72f2df;
+}
+
+.app-header span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.icon-button {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.icon-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.content {
+  padding: 12px 12px 16px;
+}
+
+.screen-stack {
+  gap: 12px;
+}
+
+.hero-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 17px;
+  color: #fff;
+  border: 0;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, #162739 0%, #203447 45%, #008879 100%),
+    #162739;
+  box-shadow: none;
+}
+
+.hero-panel::before {
+  display: none;
+}
+
+.hero-heading {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.hero-heading p {
+  color: #6ff0dd;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.hero-heading h2 {
+  margin-top: 7px;
+  color: #fff;
+  font-size: 2.08rem;
+  line-height: 1.02;
+}
+
+.hero-caption {
+  display: block;
+  max-width: min(20rem, calc(100vw - 150px));
+  margin-top: 7px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.hero-caption-parts {
+  display: contents;
+}
+
+.hero-caption-parts span {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+}
+
+.hero-panel .segmented {
+  margin-top: 0;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hero-panel .segmented button {
+  min-height: 38px;
+  color: rgba(255, 255, 255, 0.72);
+  background: transparent;
+}
+
+.hero-panel .segmented button.active {
+  color: #111827;
+  background: #fff;
+  box-shadow: none;
+}
+
+.progress-ring {
+  width: 74px;
+  height: 74px;
+  background: conic-gradient(var(--teal) 0deg, rgba(255, 255, 255, 0.32) 0deg);
+}
+
+.progress-ring div,
+.hero-panel .progress-ring div {
+  width: 60px;
+  height: 60px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  backdrop-filter: none;
+}
+
+.progress-ring span,
+.hero-panel .progress-ring span {
+  color: #64748b;
+}
+
+.range-picker label {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.range-picker input {
+  border: 0;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.feature-grid {
+  gap: 12px;
+}
+
+.feature-tile {
+  min-height: 120px;
+  padding: 18px 14px 15px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--soft-shadow);
+}
+
+.feature-tile:nth-child(1),
+.feature-tile:nth-child(2),
+.feature-tile:nth-child(3),
+.feature-tile:nth-child(4) {
+  border-color: transparent;
+  background: #fff;
+}
+
+.tile-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.feature-tile:nth-child(1) .tile-icon {
+  color: #009c99;
+  background: #e2fbf7;
+}
+
+.feature-tile:nth-child(2) .tile-icon {
+  color: #4165ff;
+  background: #eef2ff;
+}
+
+.feature-tile:nth-child(3) .tile-icon {
+  color: #ed5f53;
+  background: #fff0ed;
+}
+
+.feature-tile:nth-child(4) .tile-icon {
+  color: #72a01c;
+  background: #f2f7de;
+}
+
+.feature-tile strong {
+  font-size: 1rem;
+}
+
+.feature-tile small {
+  color: #667085;
+}
+
+.data-card,
+.integration-card,
+.exam-focus,
+.attendance-hero,
+.timeline-card,
+.mentoring-card,
+.section-header,
+.parent-status-card,
+.stat-strip,
+.admin-panel,
+.admin-overview,
+.admin-kpi,
+.admin-row-card,
+.admin-list-card {
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--soft-shadow);
+}
+
+.data-card,
+.data-card:nth-of-type(odd),
+.admin-panel,
+.admin-overview,
+.admin-kpi,
+.admin-row-card,
+.admin-list-card {
+  background: #fff;
+}
+
+.card-header svg {
+  color: #009c99;
+}
+
+.stat-strip div,
+.stat-strip div:nth-child(1),
+.stat-strip div:nth-child(2),
+.stat-strip div:nth-child(3) {
+  background: #fff;
+}
+
+.subject-row {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.bar-track,
+.week-bar,
+.plan-progress-track {
+  background: #e8edf1;
+}
+
+.week-bar span {
+  background: linear-gradient(180deg, #5278f4 0%, #13b9aa 100%);
+}
+
+.meal-item,
+.meal-item:nth-child(2),
+.attendance-duo div,
+.timer-actions button,
+.row-actions button,
+.exam-list button,
+.admin-rank-list div {
+  background: #f8fafc;
+  border-color: #dbe3ea;
+}
+
+.schedule-item {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.schedule-item time {
+  color: #009c99;
+  background: #e2fbf7;
+}
+
+.todo,
+.todo.done {
+  border-color: #dbe3ea;
+  background: #f8fafc;
+}
+
+.todo.done .todo-main span,
+.plan-todo-item.done .todo-main span,
+.timeline-row > span.good {
+  border-color: #0bb8aa;
+  background: #0bb8aa;
+}
+
+.analysis-note,
+.next-step {
+  color: #008276;
+  border: 1px solid #b9ece4;
+  background: #e4faf6;
+}
+
+.section-header {
+  border: 1px solid #c6eee7;
+  background: #e4faf6;
+}
+
+.section-header > span,
+.attendance-times {
+  color: #009c99;
+  background: #c9f5ee;
+}
+
+.exam-focus {
+  justify-items: center;
+  background: #fff;
+}
+
+.exam-focus p {
+  color: #4165ff;
+  background: transparent;
+}
+
+.timer-face {
+  background: conic-gradient(#d7dce4 var(--timer-progress), #e7ebef 0deg);
+}
+
+.timer-face > div {
+  background: #fff;
+}
+
+.exam-list button {
+  border: 1px solid transparent;
+  background: #fff;
+}
+
+.exam-list button.active {
+  border-color: #8aa5ff;
+  background: #f0f4ff;
+}
+
+.exam-list strong {
+  color: #4165ff;
+}
+
+.attendance-hero {
+  background: #fff;
+}
+
+.point {
+  background: #f8fafc;
+}
+
+.point.plus > span {
+  color: #008276;
+  background: #dff7f2;
+}
+
+.point.minus > span {
+  color: #d94b43;
+  background: #fff0ed;
+}
+
+.plan-sections {
+  gap: 12px;
+}
+
+.plan-card {
+  padding: 16px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--soft-shadow);
+}
+
+.data-card.schedule-plan-card,
+.data-card.todo-plan-card {
+  background: #fff;
+}
+
+.schedule-plan-card .plan-count-badge {
+  color: #008276;
+  background: #dff7f2;
+}
+
+.todo-plan-card .plan-count-badge {
+  color: #008276;
+  background: #dff7f2;
+}
+
+.plan-schedule-item {
+  border-color: #dbe3ea;
+  background: #fff;
+}
+
+.plan-schedule-item time {
+  color: #008276;
+  background: #dff7f2;
+}
+
+.plan-todo-item {
+  border-color: #dbe3ea;
+  background: #f8fafc;
+}
+
+.plan-todo-item.done {
+  border-color: #b9ece4;
+  background: #effbf8;
+}
+
+.plan-progress-track span {
+  background: linear-gradient(90deg, #10b9aa 0%, #5278f4 100%);
+}
+
+.row-actions button,
+.plan-card .row-actions button,
+.timer-actions button {
+  color: #344054;
+  background: #fff;
+  border: 1px solid #dbe3ea;
+}
+
+.inline-composer input,
+.plan-composer input,
+.input-label input {
+  border-color: #dbe3ea;
+  background: #fff;
+}
+
+.inline-composer button {
+  color: #fff;
+  background: #121922;
+  box-shadow: none;
+}
+
+.bottom-nav {
+  border-top: 0;
+  background: #121922;
+  box-shadow: none;
+}
+
+.bottom-nav button {
+  color: #8a94a3;
+  background: transparent;
+}
+
+.bottom-nav button.active {
+  color: #111827;
+  background: #fff;
+}
+
+.bottom-nav button.active svg {
+  color: #00a99d;
+}
+
+.admin-section-grid button.active,
+.admin-form-grid button {
+  background: #00a99d;
+}
+
+.admin-secondary-action {
+  color: #008276;
+  background: #e4faf6;
+}
+
+@media (max-width: 370px) {
+  .hero-caption {
+    max-width: 13.4rem;
+    font-size: 0.8rem;
+  }
+}

@@ -1499,7 +1499,7 @@ function StudentHome({
       <HeroPanel
         label="오늘 공부 시간"
         title={formatMinutes(studySummary[timeFilter])}
-        caption={`목표 ${formatMinutes(studySummary.goal)} 중 ${progress}% 달성, ${studySummary.streak}일 연속 기록 중`}
+        caption={`목표 ${formatMinutes(studySummary.goal)} 중 ${progress}% 달성 · ${studySummary.streak}일 연속`}
         progress={progress}
         progressLabel="달성"
       >
@@ -1638,7 +1638,15 @@ function HeroPanel({ label, title, caption, progress, progressLabel, children })
         <div>
           <p>{label}</p>
           <h2>{title}</h2>
-          <span>{caption}</span>
+          <div className="hero-caption">
+            {Array.isArray(caption) ? (
+              <div className="hero-caption-parts">
+                {caption.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+            ) : caption}
+          </div>
         </div>
         <ProgressRing value={progress} label={progressLabel} />
       </div>
